@@ -80,25 +80,25 @@ function BomManagerPage() {
   };
 
   return (
-    <section className="space-y-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 pb-5">
+    <section className="space-y-6 rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-center gap-3 border-b border-[#810055]/20 pb-5">
         <select
           value={lockerModel}
           onChange={(e) => setLockerModel(e.target.value)}
-          className="h-10 rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+          className="h-10 rounded-lg border border-[#810055]/30 px-3 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
         >
           {models.map((m) => (
             <option key={m}>{m}</option>
           ))}
         </select>
-        <div className="inline-flex rounded-lg border border-gray-300 p-1">
+        <div className="inline-flex rounded-lg border border-[#810055]/30 p-1">
           {["All", "Standard", "Custom"].map((item) => (
             <button
               key={item}
               type="button"
               onClick={() => setType(item)}
               className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150 ${
-                type === item ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50"
+                type === item ? "bg-secondary text-white" : "text-black hover:bg-[#f9ecf5]"
               }`}
             >
               {item}
@@ -108,7 +108,7 @@ function BomManagerPage() {
         <button
           type="button"
           onClick={() => setShowCustomForm(true)}
-          className="ml-auto rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700"
+          className="ml-auto rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary"
         >
           Add Custom BOM
         </button>
@@ -123,7 +123,7 @@ function BomManagerPage() {
       ) : (
         <div className="space-y-6">
           {Object.keys(grouped).length === 0 ? (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">
+            <div className="rounded-lg border border-[#810055]/20 bg-white p-8 text-center text-sm text-black">
               {lockerModel === "All"
                 ? "No BOM records available for the selected filters"
                 : `No BOM records found for locker model ${lockerModel}. Add Custom BOM to create one.`}
@@ -131,7 +131,7 @@ function BomManagerPage() {
           ) : (
             Object.entries(grouped).map(([model, rows]) => (
               <div key={model}>
-                <h3 className="mb-3 text-lg font-medium text-gray-800">Locker Model: {model}</h3>
+                <h3 className="mb-3 text-lg font-medium text-black">Locker Model: {model}</h3>
                 <DataTable
                   columns={[
                     { key: "level", label: "Level" },
@@ -168,14 +168,14 @@ function BomManagerPage() {
       )}
       {showCustomForm && (
         <div className="fixed inset-0 z-30 grid place-items-center bg-gray-900/40 p-4">
-          <div className="w-full max-w-2xl rounded-lg border border-gray-200 bg-white p-6 shadow-lg">
-            <h3 className="mb-5 text-lg font-medium text-gray-800">Custom BOM - Step {step}/2</h3>
+          <div className="w-full max-w-2xl rounded-lg border border-[#810055]/20 bg-white p-6 shadow-lg">
+            <h3 className="mb-5 text-lg font-medium text-black">Custom BOM - Step {step}/2</h3>
             {step === 1 ? (
               <div className="space-y-4">
                 <select
                   value={selectedCustomModel}
                   onChange={(e) => setSelectedCustomModel(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                  className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                 >
                   <option value="">Select Locker Model</option>
                   {models.filter((m) => m !== "All").map((m) => (
@@ -184,7 +184,7 @@ function BomManagerPage() {
                 </select>
                 <button
                   type="button"
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700"
+                  className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary"
                   onClick={() => setStep(2)}
                 >
                   Next
@@ -198,20 +198,20 @@ function BomManagerPage() {
                       value={row.item_code}
                       onChange={(e) => setCustomRows((p) => p.map((r, idx) => (idx === i ? { ...r, item_code: e.target.value } : r)))}
                       placeholder="Item Code"
-                      className="h-10 rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                      className="h-10 rounded-lg border border-[#810055]/30 px-3 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                     />
                     <input
                       value={row.component_type}
                       onChange={(e) => setCustomRows((p) => p.map((r, idx) => (idx === i ? { ...r, component_type: e.target.value } : r)))}
                       placeholder="Component Type"
-                      className="h-10 rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                      className="h-10 rounded-lg border border-[#810055]/30 px-3 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                     />
                     <input
                       type="number"
                       value={row.qty}
                       onChange={(e) => setCustomRows((p) => p.map((r, idx) => (idx === i ? { ...r, qty: e.target.value } : r)))}
                       placeholder="Qty"
-                      className="h-10 rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                      className="h-10 rounded-lg border border-[#810055]/30 px-3 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                     />
                   </div>
                 ))}
@@ -219,14 +219,14 @@ function BomManagerPage() {
                   <button
                     type="button"
                     onClick={() => setCustomRows((p) => [...p, { item_code: "", component_type: "", qty: "" }])}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-gray-50"
+                    className="rounded-lg border border-[#810055]/30 px-4 py-2 text-sm font-medium text-black transition-colors duration-150 hover:bg-[#f9ecf5]"
                   >
                     + Row
                   </button>
                   <button
                     type="button"
                     onClick={saveCustomBom}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700"
+                    className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary"
                   >
                     Save Custom BOM
                   </button>

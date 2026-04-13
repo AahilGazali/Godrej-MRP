@@ -46,13 +46,13 @@ function LockerMasterPage() {
           onUpload={handleUpload}
           persistedUploadInfo={lastUploadInfo}
         />
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between border-b border-gray-200 pb-4">
-            <h2 className="text-lg font-medium text-gray-800">Locker Master Data</h2>
+        <section className="rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between border-b border-[#810055]/20 pb-4">
+            <h2 className="text-lg font-medium text-black">Locker Master Data</h2>
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700"
+              className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary"
             >
               + Add Locker
             </button>
@@ -74,25 +74,25 @@ function LockerMasterPage() {
       </div>
       {showModal && (
         <div className="fixed inset-0 z-30 grid place-items-center bg-gray-900/40 p-4">
-          <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-lg">
-            <h3 className="mb-5 text-lg font-medium text-gray-800">Add Locker</h3>
+          <div className="w-full max-w-lg rounded-lg border border-[#810055]/20 bg-white p-6 shadow-lg">
+            <h3 className="mb-5 text-lg font-medium text-black">Add Locker</h3>
             <div className="grid gap-4">
               <input
                 value={form.product}
                 onChange={(e) => setForm((p) => ({ ...p, product: e.target.value }))}
-                className="h-10 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 py-2 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                 placeholder="Product"
               />
               <input
                 value={form.subtype}
                 onChange={(e) => setForm((p) => ({ ...p, subtype: e.target.value }))}
-                className="h-10 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 py-2 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                 placeholder="SubType"
               />
               <input
                 value={form.locker_code}
                 onChange={(e) => setForm((p) => ({ ...p, locker_code: e.target.value }))}
-                className="h-10 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+                className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 py-2 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                 placeholder="Locker code"
               />
             </div>
@@ -100,14 +100,14 @@ function LockerMasterPage() {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-gray-50"
+                className="rounded-lg border border-[#810055]/30 px-4 py-2 text-sm font-medium text-black transition-colors duration-150 hover:bg-[#f9ecf5]"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSaveLocker}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700"
+                className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary"
               >
                 Save
               </button>

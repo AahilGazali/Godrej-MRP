@@ -19,13 +19,13 @@ function App() {
   const title = titles[location.pathname] || "Godrej MRP";
 
   return (
-    <div className="min-h-screen bg-page font-sans text-gray-900">
+    <div className="min-h-screen bg-page font-sans text-black">
       <div className="flex min-h-screen">
         <Sidebar />
         <main className="min-w-0 flex-1 bg-page">
-          <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-gray-200 bg-white px-4 py-4 shadow-sm md:px-8">
-            <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-            <div className="hidden text-xs font-medium uppercase tracking-wide text-gray-500 sm:block">
+          <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-[#810055]/20 bg-white px-4 py-4 shadow-sm md:px-8">
+            <h1 className="text-2xl font-semibold text-black">{title}</h1>
+            <div className="hidden text-xs font-medium uppercase tracking-wide text-black sm:block">
               Godrej Locker Manufacturing MRP
             </div>
           </header>

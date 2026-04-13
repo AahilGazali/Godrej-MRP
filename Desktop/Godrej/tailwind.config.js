@@ -4,9 +4,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: "#1E3A8A",
-        secondary: "#2563EB",
-        page: "#F5F7FA",
+        primary: "#FFFFFF",
+        secondary: "#810055",
+        neutral: "#000000",
+        page: "#ffffff",
         card: "#FFFFFF",
         line: "#E5E7EB",
         success: "#16A34A",
@@ -15,7 +16,7 @@ export default {
         border: "#E5E7EB",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        sans: ["GEGHeadline", "Inter", "system-ui", "sans-serif"],
       },
       boxShadow: {
         sm: "0 1px 3px rgba(0,0,0,0.08)",

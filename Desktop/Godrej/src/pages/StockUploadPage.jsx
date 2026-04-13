@@ -30,15 +30,15 @@ function StockUploadPage() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr,2fr]">
-      <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-medium text-gray-800">Upload Stock</h2>
+      <section className="space-y-4 rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-medium text-black">Upload Stock</h2>
         <input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+          className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
         />
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-black">
           Only stock values from the selected date column are imported from the sheet.
         </p>
         <FileDropzone
@@ -46,15 +46,15 @@ function StockUploadPage() {
           onUpload={handleUpload}
           persistedUploadInfo={lastUploadInfo}
         />
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-          <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Upload summary</p>
+        <div className="rounded-lg border border-[#810055]/20 bg-white p-4 text-sm text-black">
+          <p className="text-xs font-medium uppercase tracking-wide text-black">Upload summary</p>
           <p className="mt-2">
             Rows saved: {summary.rows_saved} | Warnings: {summary.warnings}
           </p>
         </div>
       </section>
-      <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-medium text-gray-800">Last 7 Uploads</h2>
+      <section className="rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-medium text-black">Last 7 Uploads</h2>
         {isLoading ? (
           <SkeletonTable />
         ) : (
