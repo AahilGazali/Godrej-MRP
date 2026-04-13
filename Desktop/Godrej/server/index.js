@@ -70,6 +70,15 @@ app.post("/api/lockers/upload", async (req, res) => {
   res.json({ success: true, rowsSaved: count, warnings, fileName });
 });
 
+app.delete("/api/lockers/:lockerCode", async (req, res) => {
+  const lockerCode = String(req.params.lockerCode || "").trim();
+  if (!lockerCode) {
+    return res.status(400).json({ message: "lockerCode is required" });
+  }
+  const { rowCount } = await pool.query("DELETE FROM lockers WHERE locker_item_code = $1", [lockerCode]);
+  res.json({ success: true, deleted: rowCount });
+});
+
 app.get("/api/bom", async (_req, res) => {
   const uploaded = await pool.query(
     `SELECT
@@ -100,10 +109,12 @@ app.post("/api/bom/upload", async (req, res) => {
 
   let rowsSaved = 0;
   let warnings = 0;
+  const normBomItemCode = (raw) =>
+    raw != null && raw !== "" ? String(raw).trim().replace(/\s+/g, "") : "";
   for (const row of rows) {
     const level = row.Level ?? row.level ?? "";
     const position = row.Position ?? row.position ?? "";
-    const itemCode = row.Item ?? row.item ?? row.item_code ?? "";
+    const itemCode = normBomItemCode(row.Item ?? row.item ?? row.item_code ?? "");
     const description = row.Description ?? row.description ?? "";
     const drawingNo = row["Drawing No"] ?? row.drawing_no ?? "";
     const drawingRevNo = row["Drawing Rev No"] ?? row.drawing_rev_no ?? "";
@@ -166,6 +177,21 @@ app.post("/api/bom/custom", async (req, res) => {
   res.status(201).json(inserted);
 });
 
+app.delete("/api/bom/model/:lockerModel", async (req, res) => {
+  const lockerModel = String(req.params.lockerModel || "").trim();
+  if (!lockerModel) {
+    return res.status(400).json({ message: "lockerModel is required" });
+  }
+  const uploaded = await pool.query("DELETE FROM bom_uploaded_rows WHERE locker_model = $1", [lockerModel]);
+  const custom = await pool.query("DELETE FROM bom_items WHERE locker_model = $1", [lockerModel]);
+  res.json({
+    success: true,
+    deletedUploaded: uploaded.rowCount,
+    deletedCustom: custom.rowCount,
+    deletedTotal: (uploaded.rowCount || 0) + (custom.rowCount || 0),
+  });
+});
+
 app.get("/api/uploads", async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT id, TO_CHAR(upload_date, 'YYYY-MM-DD') AS date, file_name AS file, rows_saved, warnings
@@ -178,31 +204,80 @@ app.get("/api/uploads", async (_req, res) => {
 
 app.post("/api/uploads", async (req, res) => {
   const { date, fileName, stockRows = [] } = req.body;
-  let rowsSaved = 0;
   let warnings = 0;
+  const str = (v) => (v == null || v === "" ? "" : String(v).trim());
+  /** Match MRP/BOM join: trim + collapse spaces (same normalization as MRP SQL) */
+  const normalizeItemCode = (raw) => {
+    if (raw == null || raw === "") return "";
+    return String(raw).trim().replace(/\s+/g, "");
+  };
+  /** Last occurrence wins if the same item_code appears more than once in the file */
+  const byItemCode = new Map();
   for (const row of stockRows) {
-    const item_code = row.item_code || row.code;
+    const rawCode = row.item_code || row.code;
+    const item_code = normalizeItemCode(rawCode);
     const rawQty = row.stock ?? row.stock_qty ?? row.qty;
     const stock_qty = Number(rawQty);
     if (!item_code || Number.isNaN(stock_qty)) {
       warnings += 1;
       continue;
     }
-    await pool.query(
-      `INSERT INTO stock_items (item_code, stock_qty, updated_at)
-       VALUES ($1, $2, NOW())
-       ON CONFLICT (item_code)
-       DO UPDATE SET stock_qty = EXCLUDED.stock_qty, updated_at = NOW()`,
-      [item_code, stock_qty]
-    );
-    rowsSaved += 1;
+    byItemCode.set(item_code, {
+      item_code,
+      stock_qty,
+      data_used_by: str(row.data_used_by),
+      sr_no: str(row.sr_no),
+      stock_material: str(row.material ?? row.stock_material),
+      ln_description: str(row.ln_description),
+      short_description: str(row.short_description),
+      uom: str(row.uom),
+    });
   }
-  await pool.query(
-    `INSERT INTO stock_uploads (upload_date, file_name, rows_saved, warnings)
-     VALUES ($1, $2, $3, $4)`,
-    [date, fileName, rowsSaved, warnings]
-  );
-  res.status(201).json({ rowsSaved, warnings, fileName });
+  const validRows = Array.from(byItemCode.values());
+  if (validRows.length === 0) {
+    return res.status(400).json({ message: "No valid stock rows to import" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM stock_items");
+    await client.query("DELETE FROM stock_uploads");
+    for (const r of validRows) {
+      await client.query(
+        `INSERT INTO stock_items (
+          item_code, stock_qty, data_used_by, sr_no, stock_material, ln_description, short_description, uom, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+        [
+          r.item_code,
+          r.stock_qty,
+          r.data_used_by || null,
+          r.sr_no || null,
+          r.stock_material || null,
+          r.ln_description || null,
+          r.short_description || null,
+          r.uom || null,
+        ]
+      );
+    }
+    await client.query(
+      `INSERT INTO stock_uploads (upload_date, file_name, rows_saved, warnings)
+       VALUES ($1, $2, $3, $4)`,
+      [date, fileName, validRows.length, warnings]
+    );
+    await client.query("COMMIT");
+    res.status(201).json({
+      rowsSaved: validRows.length,
+      warnings,
+      fileName,
+      replacedPreviousStock: true,
+    });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
 });
 
 app.post("/api/plan", async (req, res) => {
@@ -234,10 +309,17 @@ app.get("/api/mrp/results", async (req, res) => {
     ),
     uploaded_qty AS (
       SELECT
+        id AS source_id,
+        'uploaded'::text AS source_type,
         locker_model,
+        level,
+        position,
         item_code,
         COALESCE(NULLIF(TRIM(description), ''), 'Component') AS component_type,
         COALESCE(NULLIF(TRIM(description), ''), NULLIF(TRIM(item_code), '')) AS material_label,
+        TRIM(COALESCE(description, '')) AS bom_description,
+        TRIM(COALESCE(inv_unit, '')) AS bom_inv_unit,
+        TRIM(COALESCE(drawing_no, '')) AS bom_drawing_no,
         CASE
           WHEN (regexp_replace(TRIM(COALESCE(net_quantity, '')), ',', '.', 'g') ~ '^-?[0-9]+(\\.[0-9]+)?$')
           THEN (regexp_replace(TRIM(COALESCE(net_quantity, '')), ',', '.', 'g'))::numeric
@@ -248,18 +330,29 @@ app.get("/api/mrp/results", async (req, res) => {
       FROM bom_uploaded_rows
     ),
     combined_bom AS (
-      SELECT locker_model, item_code, component_type,
+      SELECT
+        id AS source_id,
+        'classic'::text AS source_type,
+        locker_model,
+        NULL::text AS level,
+        NULL::text AS position,
+        item_code,
+        component_type,
         item_code AS material_label,
+        NULL::text AS bom_description,
+        NULL::text AS bom_inv_unit,
+        NULL::text AS bom_drawing_no,
         qty::numeric AS qty
       FROM bom_items
       UNION ALL
-      SELECT locker_model, item_code, component_type, material_label, qty
+      SELECT source_id, source_type, locker_model, level, position, item_code, component_type, material_label, bom_description, bom_inv_unit, bom_drawing_no, qty
       FROM uploaded_qty
     ),
-    locker_bom_match AS (
-      SELECT b.*, l.locker_item_code AS match_locker_code
-      FROM combined_bom b
-      INNER JOIN lockers l ON (
+    plan_scoped_bom AS (
+      SELECT b.*, p.locker_item_code AS match_locker_code
+      FROM plan_scope p
+      INNER JOIN lockers l ON l.locker_item_code = p.locker_item_code
+      INNER JOIN combined_bom b ON (
         LOWER(TRIM(b.locker_model)) = LOWER(TRIM(l.model))
         OR (COALESCE(l.subtype, '') <> '' AND LOWER(TRIM(b.locker_model)) = LOWER(TRIM(l.subtype)))
         OR (COALESCE(l.product, '') <> '' AND LOWER(TRIM(b.locker_model)) = LOWER(TRIM(l.product)))
@@ -285,52 +378,70 @@ app.get("/api/mrp/results", async (req, res) => {
             LIKE '%' || regexp_replace(lower(trim(COALESCE(l.product, '') || COALESCE(l.subtype, ''))), '[^a-z0-9]+', '', 'g') || '%'
         )
       )
-      WHERE b.qty > 0
+      WHERE b.qty IS NOT NULL
     ),
     fallback_bom AS (
       SELECT b.*, p2.locker_item_code AS match_locker_code
       FROM combined_bom b
       CROSS JOIN plan_scope p2
-      WHERE b.qty > 0
-        AND (SELECT COUNT(*) FROM locker_bom_match) = 0
-        AND (SELECT COUNT(DISTINCT locker_model) FROM combined_bom WHERE qty > 0) = 1
+      WHERE b.qty IS NOT NULL
+        AND (SELECT COUNT(*) FROM plan_scoped_bom) = 0
+        AND (SELECT COUNT(DISTINCT locker_model) FROM combined_bom WHERE qty IS NOT NULL) = 1
     ),
     bom_resolved AS (
-      SELECT * FROM locker_bom_match
+      SELECT * FROM plan_scoped_bom
       UNION ALL
       SELECT * FROM fallback_bom
     )
     SELECT
-      COALESCE(NULLIF(TRIM(MAX(b.item_code)), ''), MAX(b.material_label)) AS item_code,
-      MAX(b.component_type) AS component_type,
-      MAX(b.material_label) AS material_name,
-      COALESCE(SUM(b.qty * p.quantity), 0) AS required_quantity,
-      COALESCE(MAX(s.stock_qty), 0) AS stock_available
+      ROW_NUMBER() OVER (
+        ORDER BY p.locker_item_code, b.locker_model, b.source_type, b.source_id, COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label)
+      ) AS line_no,
+      COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label) AS item_code,
+      COALESCE((b.qty * p.quantity), 0) AS required_quantity,
+      COALESCE(s.stock_qty, 0) AS stock_available,
+      NULLIF(TRIM(s.stock_material), '') AS material,
+      COALESCE(
+        NULLIF(TRIM(s.ln_description), ''),
+        NULLIF(TRIM(b.bom_description), ''),
+        ''
+      ) AS ln_description,
+      COALESCE(
+        NULLIF(TRIM(s.short_description), ''),
+        NULLIF(TRIM(b.bom_drawing_no), ''),
+        ''
+      ) AS short_description
     FROM bom_resolved b
     INNER JOIN plan_scope p ON p.locker_item_code = b.match_locker_code
-    LEFT JOIN stock_items s ON s.item_code = COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label)
-    GROUP BY COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label)
-    ORDER BY 1
+    LEFT JOIN stock_items s ON regexp_replace(lower(trim(s.item_code)), '\\s+', '', 'g')
+      = regexp_replace(
+        lower(trim(COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label))),
+        '\\s+',
+        '',
+        'g'
+      )
+    ORDER BY line_no
   `;
 
   const { rows } = await pool.query(sql, [planDateParam]);
   const mapped = rows
-    .map((r, idx) => {
+    .map((r) => {
       const required_quantity = Number(r.required_quantity || 0);
       const stock_available = Number(r.stock_available || 0);
       const difference = stock_available - required_quantity;
       return {
-        id: idx + 1,
-        material_name: r.material_name,
-        component_type: r.component_type,
+        id: Number(r.line_no),
+        sr_no: Number(r.line_no),
         item_code: r.item_code,
+        material: r.material ?? "",
+        ln_description: r.ln_description ?? "",
+        short_description: r.short_description ?? "",
         required_quantity,
         stock_available,
         difference,
         status: difference < 0 ? "LOW" : "OK",
       };
-    })
-    .filter((r) => r.required_quantity > 0);
+    });
   res.json(mapped);
 });
 

@@ -19,15 +19,17 @@ function App() {
   const title = titles[location.pathname] || "Godrej MRP";
 
   return (
-    <div className="min-h-screen bg-appbg text-slate-800">
-      <div className="mx-auto flex max-w-[1680px]">
+    <div className="min-h-screen bg-page font-sans text-gray-900">
+      <div className="flex min-h-screen">
         <Sidebar />
-        <main className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-appbg/95 px-4 backdrop-blur md:px-6">
-            <h1 className="text-lg font-semibold text-slate-900 md:text-xl">{title}</h1>
-            <div className="text-xs font-medium text-slate-500">Godrej Locker Manufacturing MRP</div>
+        <main className="min-w-0 flex-1 bg-page">
+          <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-gray-200 bg-white px-4 py-4 shadow-sm md:px-8">
+            <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
+            <div className="hidden text-xs font-medium uppercase tracking-wide text-gray-500 sm:block">
+              Godrej Locker Manufacturing MRP
+            </div>
           </header>
-          <div className="p-4 md:p-6">
+          <div className="space-y-6 p-4 pb-10 md:p-8">
             <Routes>
               <Route path="/" element={<Navigate to="/locker-master" replace />} />
               <Route path="/locker-master" element={<LockerMasterPage />} />

@@ -39,20 +39,20 @@ function LockerMasterPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[1fr,2fr]">
+    <div className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-[1fr,2fr]">
         <FileDropzone
           uploading={uploadMutation.isPending}
           onUpload={handleUpload}
           persistedUploadInfo={lastUploadInfo}
         />
-        <section className="rounded-xl border border-border bg-white p-4 shadow-card">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900">Locker Master Data</h2>
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between border-b border-gray-200 pb-4">
+            <h2 className="text-lg font-medium text-gray-800">Locker Master Data</h2>
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700"
             >
               + Add Locker
             </button>
@@ -73,34 +73,42 @@ function LockerMasterPage() {
         </section>
       </div>
       {showModal && (
-        <div className="fixed inset-0 z-30 grid place-items-center bg-slate-900/35">
-          <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl">
-            <h3 className="mb-4 text-lg font-semibold">Add Locker</h3>
-            <div className="grid gap-3">
+        <div className="fixed inset-0 z-30 grid place-items-center bg-gray-900/40 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-lg">
+            <h3 className="mb-5 text-lg font-medium text-gray-800">Add Locker</h3>
+            <div className="grid gap-4">
               <input
                 value={form.product}
                 onChange={(e) => setForm((p) => ({ ...p, product: e.target.value }))}
-                className="rounded border border-border px-3 py-2"
+                className="h-10 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
                 placeholder="Product"
               />
               <input
                 value={form.subtype}
                 onChange={(e) => setForm((p) => ({ ...p, subtype: e.target.value }))}
-                className="rounded border border-border px-3 py-2"
+                className="h-10 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
                 placeholder="SubType"
               />
               <input
                 value={form.locker_code}
                 onChange={(e) => setForm((p) => ({ ...p, locker_code: e.target.value }))}
-                className="rounded border border-border px-3 py-2"
+                className="h-10 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
                 placeholder="Locker code"
               />
             </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setShowModal(false)} className="rounded border border-border px-4 py-2 text-sm">
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors duration-150 hover:bg-gray-50"
+              >
                 Cancel
               </button>
-              <button onClick={handleSaveLocker} className="rounded bg-primary px-4 py-2 text-sm text-white">
+              <button
+                type="button"
+                onClick={handleSaveLocker}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700"
+              >
                 Save
               </button>
             </div>

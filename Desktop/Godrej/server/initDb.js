@@ -63,6 +63,12 @@ CREATE TABLE IF NOT EXISTS stock_items (
   id SERIAL PRIMARY KEY,
   item_code TEXT UNIQUE NOT NULL,
   stock_qty NUMERIC NOT NULL,
+  sr_no TEXT,
+  stock_material TEXT,
+  ln_description TEXT,
+  short_description TEXT,
+  uom TEXT,
+  data_used_by TEXT,
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -73,6 +79,11 @@ CREATE TABLE IF NOT EXISTS plan_entries (
   subtype TEXT NOT NULL,
   quantity NUMERIC NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS app_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
 );
 `;
 
@@ -85,11 +96,17 @@ VALUES
 ON CONFLICT (locker_item_code) DO NOTHING;
 
 INSERT INTO bom_items (locker_model, item_code, component_type, qty, bom_type)
-VALUES
-('GX-2', 'MAT-101', 'Sheet', 2, 'Standard'),
-('GX-2', 'MAT-115', 'Hinge', 4, 'Custom'),
-('GX-4', 'MAT-201', 'Frame', 1, 'Standard')
-ON CONFLICT DO NOTHING;
+SELECT v.locker_model, v.item_code, v.component_type, v.qty, v.bom_type::text
+FROM (
+  VALUES
+    ('GX-2', 'MAT-101', 'Sheet', 2::numeric, 'Standard'),
+    ('GX-2', 'MAT-115', 'Hinge', 4::numeric, 'Custom'),
+    ('GX-4', 'MAT-201', 'Frame', 1::numeric, 'Standard')
+) AS v(locker_model, item_code, component_type, qty, bom_type)
+WHERE NOT EXISTS (
+  SELECT 1 FROM bom_items bi
+  WHERE bi.locker_model = v.locker_model AND bi.item_code = v.item_code
+);
 
 INSERT INTO stock_items (item_code, stock_qty)
 VALUES
@@ -104,5 +121,24 @@ export async function initDb() {
   await pool.query(`ALTER TABLE lockers ADD COLUMN IF NOT EXISTS product TEXT`);
   await pool.query(`ALTER TABLE lockers ADD COLUMN IF NOT EXISTS subtype TEXT`);
   await pool.query(`UPDATE lockers SET product = COALESCE(product, description), subtype = COALESCE(subtype, model)`);
-  await pool.query(seedSql);
+  await pool.query(`ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS sr_no TEXT`);
+  await pool.query(`ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS stock_material TEXT`);
+  await pool.query(`ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS ln_description TEXT`);
+  await pool.query(`ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS short_description TEXT`);
+  await pool.query(`ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS uom TEXT`);
+  await pool.query(`ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS data_used_by TEXT`);
+
+  // Demo seed at most once, and only if DB was empty — so Remove / Remove BOM stay gone after restart
+  const { rows: seeded } = await pool.query(
+    `SELECT 1 FROM app_meta WHERE key = 'demo_seed_v1' LIMIT 1`
+  );
+  if (seeded.length === 0) {
+    const { rows: cnt } = await pool.query(`SELECT COUNT(*)::int AS n FROM lockers`);
+    if (cnt[0]?.n === 0) {
+      await pool.query(seedSql);
+    }
+    await pool.query(
+      `INSERT INTO app_meta (key, value) VALUES ('demo_seed_v1', '1') ON CONFLICT (key) DO NOTHING`
+    );
+  }
 }

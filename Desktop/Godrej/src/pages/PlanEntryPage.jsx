@@ -62,16 +62,16 @@ function PlanEntryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900">Plan Entry</h2>
-        <p className="mt-1 text-sm text-slate-500">
+      <div className="border-b border-gray-200 pb-4">
+        <h2 className="text-2xl font-semibold text-gray-900">Plan Entry</h2>
+        <p className="mt-1 text-sm text-gray-600">
           Add locker codes and quantities, then calculate material requirements.
         </p>
       </div>
 
-      <section className="rounded-xl border border-border bg-white p-6 shadow-card">
-        <div className="mb-5 max-w-xs">
-          <label htmlFor="plan-date" className="mb-1 block text-sm font-medium text-slate-700">
+      <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="mb-6 max-w-xs">
+          <label htmlFor="plan-date" className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">
             Date
           </label>
           <input
@@ -79,19 +79,19 @@ function PlanEntryPage() {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-lg border border-border px-3 py-2.5 text-sm"
+            className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
           <div className="min-w-0 flex-1">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Locker item code</label>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Locker item code</label>
             <input
               list="planLockerCodes"
               placeholder="Locker Item Code"
               value={form.locker_item_code}
               onChange={(e) => setForm((p) => ({ ...p, locker_item_code: e.target.value }))}
-              className="w-full rounded-lg border border-border px-4 py-3 text-sm"
+              className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
             />
             <datalist id="planLockerCodes">
               {lockerCodes.map((c) => (
@@ -100,20 +100,20 @@ function PlanEntryPage() {
             </datalist>
           </div>
           <div className="w-full sm:w-28">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Qty</label>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Qty</label>
             <input
               type="number"
               min={1}
               placeholder="1"
               value={form.quantity}
               onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))}
-              className="w-full rounded-lg border border-border px-3 py-3 text-sm"
+              className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <button
             type="button"
             onClick={addRow}
-            className="rounded-lg bg-success px-5 py-3 text-sm font-semibold text-white hover:opacity-95 sm:shrink-0"
+            className="rounded-lg bg-success px-5 py-3 text-sm font-semibold text-white transition-opacity duration-150 hover:opacity-95 sm:shrink-0"
           >
             + Add Locker
           </button>
@@ -132,7 +132,7 @@ function PlanEntryPage() {
                   <button
                     type="button"
                     onClick={() => removeRow(row.id)}
-                    className="text-sm font-medium text-danger underline decoration-danger/80 hover:opacity-80"
+                    className="rounded-lg bg-red-50 px-2 py-1 text-sm font-medium text-red-600 transition-colors duration-150 hover:bg-red-100"
                   >
                     Delete
                   </button>
@@ -144,12 +144,12 @@ function PlanEntryPage() {
           />
         </div>
 
-        <div className="mt-6 flex justify-end border-t border-border pt-6">
+        <div className="mt-6 flex justify-end border-t border-gray-200 pt-6">
           <button
             type="button"
             disabled={savePlanMutation.isPending}
             onClick={handleCalculate}
-            className="rounded-lg border-2 border-border bg-white px-8 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-blue-600 px-8 py-2.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {savePlanMutation.isPending ? "Saving…" : "Calculate Materials"}
           </button>

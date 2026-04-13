@@ -3,6 +3,8 @@ import * as XLSX from "xlsx";
 import {
   addCustomBom,
   addLocker,
+  deleteBomByModel,
+  deleteLocker,
   fetchBom,
   fetchLockerMaster,
   fetchMrpResults,
@@ -116,16 +118,138 @@ function findItemColumnIndex(headers) {
   return -1;
 }
 
+/** Header match for stock sheet optional columns (SR NO., Material, LN Description, etc.) */
+function normalizeHeaderCompact(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function findOptionalColumnIndex(headerRow, matchCompact) {
+  for (let i = 0; i < headerRow.length; i++) {
+    const c = normalizeHeaderCompact(headerRow[i]);
+    if (!c) continue;
+    if (matchCompact(c)) return i;
+  }
+  return -1;
+}
+
+/** Column D "Material" (Wood / Wood MTO) — avoid matching "Material description" type headers */
+function matchMaterialHeaderCompact(c) {
+  if (!c) return false;
+  if (c === "material" || c === "materialtype" || c === "materialgroup" || c === "matl") return true;
+  if (c.startsWith("material") && !c.includes("description") && !c.includes("desc")) return true;
+  return false;
+}
+
+/** Header is not always row 0 (titles, blanks above table) */
+function findStockHeaderRowIndex(grid) {
+  const max = Math.min(grid.length, 40);
+  for (let i = 0; i < max; i++) {
+    const row = grid[i];
+    if (!Array.isArray(row) || !row.length) continue;
+    if (findItemColumnIndex(row) >= 0) return i;
+  }
+  return 0;
+}
+
+/**
+ * Prefer "Master" / "Stock" tab, else first sheet that has a real ITEM CODE header row.
+ */
+function pickStockGrid(workbook) {
+  const names = workbook.SheetNames || [];
+  if (!names.length) return null;
+  const compact = (n) => normalizeHeaderCompact(n);
+  const ranked = [
+    ...names.filter((n) => compact(n) === "master"),
+    ...names.filter((n) => compact(n) === "stock"),
+    ...names.filter((n) => compact(n) !== "master" && compact(n) !== "stock"),
+  ];
+  for (const name of ranked) {
+    const sheet = workbook.Sheets[name];
+    if (!sheet) continue;
+    const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false, raw: false });
+    if (!grid.length) continue;
+    const headerRowIndex = findStockHeaderRowIndex(grid);
+    if (findItemColumnIndex(grid[headerRowIndex]) >= 0) {
+      return { grid, headerRowIndex };
+    }
+  }
+  return null;
+}
+
+function cellAt(row, colIdx) {
+  if (colIdx < 0) return "";
+  const v = row[colIdx];
+  if (v === null || v === undefined) return "";
+  return String(v).trim();
+}
+
+/** Align with server/MRP join: trim and remove spaces so ITEM CODE matches BOM */
+function normalizeStockItemCode(raw) {
+  if (raw == null || raw === "") return "";
+  return String(raw).trim().replace(/\s+/g, "");
+}
+
+function stockMetaFromObjectRow(row) {
+  const entries = Object.entries(row);
+  const pick = (matchCompact) => {
+    for (const [k, v] of entries) {
+      const c = normalizeHeaderCompact(k);
+      if (!c) continue;
+      if (matchCompact(c)) {
+        if (v === null || v === undefined || v === "") return "";
+        return String(v).trim();
+      }
+    }
+    return "";
+  };
+  return {
+    data_used_by: pick(
+      (c) =>
+        c === "datausedby" ||
+        (c.includes("data") && c.includes("used") && c.includes("by"))
+    ),
+    sr_no: pick(
+      (c) =>
+        c === "srno" ||
+        c === "srnumber" ||
+        c === "slno" ||
+        c === "sno" ||
+        (c.startsWith("sr") && c.includes("no"))
+    ),
+    material: pick(matchMaterialHeaderCompact),
+    ln_description: pick(
+      (c) => (c.includes("ln") && (c.includes("description") || c.includes("desc"))) || c === "lndescription"
+    ),
+    short_description: pick(
+      (c) =>
+        (c.includes("short") && (c.includes("description") || c.includes("discription"))) ||
+        c === "shortdescription" ||
+        c === "shortdiscription"
+    ),
+    uom: pick((c) => c === "uom" || c === "unitofmeasure" || c === "unit"),
+  };
+}
+
 /**
  * Parse first sheet as grid; pick stock qty column by selected date or latest date column in file.
  */
 function parseStockSheetFromXlsx(buffer, selectedIsoDate) {
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false });
-  if (!grid.length) return { stockRows: [], dateColumnLabel: null, usedFallback: false };
-
-  const headerRow = grid[0];
+  const picked = pickStockGrid(workbook);
+  if (!picked) {
+    return {
+      stockRows: [],
+      dateColumnLabel: null,
+      usedFallback: false,
+      error: "No sheet with an ITEM CODE header row found (use a tab like Master with headers, or put the table at the top).",
+    };
+  }
+  const { grid, headerRowIndex } = picked;
+  const headerRow = grid[headerRowIndex];
   const itemCol = findItemColumnIndex(headerRow);
   if (itemCol < 0) {
     return { stockRows: [], dateColumnLabel: null, usedFallback: false, error: "No ITEM CODE column found (expected e.g. ITEM COD / Item Code)" };
@@ -174,16 +298,53 @@ function parseStockSheetFromXlsx(buffer, selectedIsoDate) {
     return { stockRows: [], dateColumnLabel: null, usedFallback: false, error: "No date or numeric stock column found in the sheet" };
   }
 
+  const srCol = findOptionalColumnIndex(
+    headerRow,
+    (c) =>
+      c === "srno" ||
+      c === "srnumber" ||
+      c === "slno" ||
+      c === "sno" ||
+      (c.startsWith("sr") && c.includes("no"))
+  );
+  const materialCol = findOptionalColumnIndex(headerRow, matchMaterialHeaderCompact);
+  const lnDescCol = findOptionalColumnIndex(
+    headerRow,
+    (c) => (c.includes("ln") && (c.includes("description") || c.includes("desc"))) || c === "lndescription"
+  );
+  const shortDescCol = findOptionalColumnIndex(
+    headerRow,
+    (c) =>
+      (c.includes("short") && (c.includes("description") || c.includes("discription"))) ||
+      c === "shortdescription" ||
+      c === "shortdiscription"
+  );
+  const uomCol = findOptionalColumnIndex(headerRow, (c) => c === "uom" || c === "unitofmeasure" || c === "unit");
+  const dataUsedByCol = findOptionalColumnIndex(
+    headerRow,
+    (c) =>
+      c === "datausedby" ||
+      (c.includes("data") && c.includes("used") && c.includes("by"))
+  );
+
   const stockRows = [];
-  for (let r = 1; r < grid.length; r++) {
+  for (let r = headerRowIndex + 1; r < grid.length; r++) {
     const row = grid[r];
-    const item_code = String(row[itemCol] ?? "").trim();
+    const item_code = normalizeStockItemCode(row[itemCol]);
     if (!item_code) continue;
     let raw = row[qtyCol];
     if (raw === "" || raw === "-" || raw === null || raw === undefined) continue;
     const stock = typeof raw === "number" ? raw : Number(String(raw).replace(/,/g, ""));
     if (Number.isNaN(stock)) continue;
-    stockRows.push({ item_code, stock });
+    const meta = {
+      data_used_by: cellAt(row, dataUsedByCol),
+      sr_no: cellAt(row, srCol),
+      material: cellAt(row, materialCol),
+      ln_description: cellAt(row, lnDescCol),
+      short_description: cellAt(row, shortDescCol),
+      uom: cellAt(row, uomCol),
+    };
+    stockRows.push({ item_code, stock, ...meta });
   }
 
   return { stockRows, dateColumnLabel, usedFallback };
@@ -227,9 +388,10 @@ export const useFileUpload = () =>
               );
             });
             const qtyEntry = entries.find(([k]) => targetKeys.has(normalizeKey(k)));
-            const item_code = itemCodeEntry?.[1] ? String(itemCodeEntry[1]).trim() : "";
+            const item_code = itemCodeEntry?.[1] ? normalizeStockItemCode(itemCodeEntry[1]) : "";
             const stock = qtyEntry?.[1];
-            return { item_code, stock };
+            const meta = stockMetaFromObjectRow(row);
+            return { item_code, stock, ...meta };
           })
           .filter((r) => r.item_code && r.stock !== "" && r.stock !== null && r.stock !== undefined);
       };
@@ -333,9 +495,19 @@ export const useAddLocker = () =>
     mutationFn: addLocker,
   });
 
+export const useDeleteLocker = () =>
+  useMutation({
+    mutationFn: deleteLocker,
+  });
+
 export const useAddCustomBom = () =>
   useMutation({
     mutationFn: addCustomBom,
+  });
+
+export const useDeleteBomByModel = () =>
+  useMutation({
+    mutationFn: deleteBomByModel,
   });
 
 export const useSavePlan = () =>

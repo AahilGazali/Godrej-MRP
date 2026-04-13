@@ -5,16 +5,23 @@ export default {
     extend: {
       colors: {
         primary: "#1E3A8A",
+        secondary: "#2563EB",
+        page: "#F5F7FA",
+        card: "#FFFFFF",
+        line: "#E5E7EB",
         success: "#16A34A",
         danger: "#DC2626",
-        appbg: "#F8FAFC",
-        border: "#E2E8F0",
+        appbg: "#F5F7FA",
+        border: "#E5E7EB",
+      },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
       },
       boxShadow: {
-        card: "0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 16px rgba(15, 23, 42, 0.04)",
+        sm: "0 1px 3px rgba(0,0,0,0.08)",
+        card: "0 1px 3px rgba(0,0,0,0.08)",
       },
     },
   },
   plugins: [],
-}
-
+};

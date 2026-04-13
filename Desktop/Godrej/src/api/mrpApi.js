@@ -15,6 +15,11 @@ export const uploadLockerRows = async ({ fileName, rows }) => {
   return data;
 };
 
+export const deleteLocker = async (lockerCode) => {
+  const { data } = await client.delete(`/lockers/${encodeURIComponent(lockerCode)}`);
+  return data;
+};
+
 export const fetchBom = async () => {
   const { data } = await client.get("/bom");
   return data;
@@ -27,6 +32,11 @@ export const addCustomBom = async ({ locker_model, rows }) => {
 
 export const uploadBomRows = async ({ locker_model, fileName, rows }) => {
   const { data } = await client.post("/bom/upload", { locker_model, fileName, rows });
+  return data;
+};
+
+export const deleteBomByModel = async (lockerModel) => {
+  const { data } = await client.delete(`/bom/model/${encodeURIComponent(lockerModel)}`);
   return data;
 };
 

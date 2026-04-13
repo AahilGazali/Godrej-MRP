@@ -1,12 +1,14 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
   margin: 0;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  font-family: Inter, system-ui, sans-serif;
+  background: #f5f7fa;
+  color: #111827;
 }
 
 * {

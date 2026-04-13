@@ -38,28 +38,28 @@ function FileDropzone({ onUpload, uploading, persistedUploadInfo }) {
   };
 
   return (
-    <div className="rounded-xl border border-border bg-white p-4 shadow-card">
+    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
       <div
         {...getRootProps()}
-        className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition ${
-          isDragActive ? "border-primary bg-blue-50" : "border-border bg-slate-50"
+        className={`cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors duration-150 ${
+          isDragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-gray-50 hover:bg-gray-100"
         }`}
       >
         <input {...getInputProps()} />
-        <p className="text-sm text-slate-700">Drag & drop file here, or click to browse</p>
-        <p className="mt-1 text-xs text-slate-500">Accepted: .csv, .xlsx</p>
+        <p className="text-sm font-medium text-gray-600">Drag & drop file here, or click to browse</p>
+        <p className="mt-2 text-sm text-gray-500">Accepted: .csv, .xlsx</p>
       </div>
       {file && (
-        <div className="mt-3 flex items-center justify-between rounded-md border border-border p-3 text-sm">
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
           <span className="truncate">{file.name}</span>
-          <span className="text-slate-500">{Math.ceil(file.size / 1024)} KB</span>
+          <span className="text-gray-500">{Math.ceil(file.size / 1024)} KB</span>
         </div>
       )}
       {!file && persistedUploadInfo?.fileName && (
-        <div className="mt-3 rounded-md border border-border bg-slate-50 p-3 text-sm">
-          <p className="truncate text-slate-700">Last uploaded: {persistedUploadInfo.fileName}</p>
+        <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+          <p className="truncate text-gray-700">Last uploaded: {persistedUploadInfo.fileName}</p>
           {persistedUploadInfo.uploadedAt && (
-            <p className="mt-1 text-xs text-slate-500">Date: {persistedUploadInfo.uploadedAt}</p>
+            <p className="mt-1 text-xs text-gray-500">Date: {persistedUploadInfo.uploadedAt}</p>
           )}
         </div>
       )}
@@ -68,17 +68,17 @@ function FileDropzone({ onUpload, uploading, persistedUploadInfo }) {
           type="button"
           disabled={!file || uploading}
           onClick={handleUpload}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {uploading ? "Uploading..." : "Upload File"}
         </button>
       </div>
       {progress > 0 && (
-        <div className="mt-3">
-          <div className="h-2 w-full rounded bg-slate-200">
-            <div className="h-2 rounded bg-primary transition-all" style={{ width: `${progress}%` }} />
+        <div className="mt-4">
+          <div className="h-2 w-full rounded-full bg-gray-200">
+            <div className="h-2 rounded-full bg-blue-600 transition-all" style={{ width: `${progress}%` }} />
           </div>
-          <p className="mt-1 text-xs text-slate-500">{progress}% complete</p>
+          <p className="mt-1 text-xs text-gray-500">{progress}% complete</p>
         </div>
       )}
     </div>
