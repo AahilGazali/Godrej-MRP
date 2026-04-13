@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 
-function DataTable({ columns, rows, emptyText = "No data available", rowClassName, rowStyle, showSearch = true }) {
+function DataTable({
+  columns,
+  rows,
+  emptyText = "No data available",
+  rowClassName,
+  rowStyle,
+  showSearch = true,
+  searchKeys,
+}) {
   const [query, setQuery] = useState("");
   const defaultSortKey = columns.find((c) => c.sortable !== false)?.key;
   const [sortKey, setSortKey] = useState(defaultSortKey);
@@ -10,7 +18,13 @@ function DataTable({ columns, rows, emptyText = "No data available", rowClassNam
     const q = query.trim().toLowerCase();
     let data = rows;
     if (q) {
-      data = rows.filter((r) => Object.values(r).some((v) => String(v).toLowerCase().includes(q)));
+      data = rows.filter((r) => {
+        const values =
+          Array.isArray(searchKeys) && searchKeys.length
+            ? searchKeys.map((key) => r?.[key])
+            : Object.values(r);
+        return values.some((v) => String(v ?? "").toLowerCase().includes(q));
+      });
     }
     if (sortKey) {
       data = [...data].sort((a, b) => {
@@ -20,7 +34,7 @@ function DataTable({ columns, rows, emptyText = "No data available", rowClassNam
       });
     }
     return data;
-  }, [rows, query, sortKey, sortDir]);
+  }, [rows, query, sortKey, sortDir, searchKeys]);
 
   const toggleSort = (key) => {
     if (sortKey === key) {

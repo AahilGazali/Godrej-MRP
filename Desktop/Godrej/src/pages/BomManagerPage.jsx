@@ -168,7 +168,16 @@ function BomManagerPage() {
       )}
       {showCustomForm && (
         <div className="fixed inset-0 z-30 grid place-items-center bg-gray-900/40 p-4">
-          <div className="w-full max-w-2xl rounded-lg border border-[#810055]/20 bg-white p-6 shadow-lg">
+          <div className="relative w-full max-w-2xl rounded-lg border border-[#810055]/20 bg-white p-6 shadow-lg">
+            <button
+              onClick={() => setShowCustomForm(false)}
+              className="absolute right-4 top-4 flex items-center justify-center rounded-md p-1.5 text-neutral transition-colors duration-200 hover:bg-secondary/10 hover:text-secondary focus:outline-none"
+              aria-label="Close modal"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
             <h3 className="mb-5 text-lg font-medium text-black">Custom BOM - Step {step}/2</h3>
             {step === 1 ? (
               <div className="space-y-4">

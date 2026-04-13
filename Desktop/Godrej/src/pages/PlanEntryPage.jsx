@@ -1,13 +1,50 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import DataTable from "../components/DataTable";
 import { useSavePlan, useLockerMaster } from "../hooks/useMrpData";
 import { useQueryClient } from "@tanstack/react-query";
 
+const PLAN_ENTRY_DRAFT_KEY = "plan_entry_draft";
+
+function readPlanEntryDraft() {
+  try {
+    const raw = sessionStorage.getItem(PLAN_ENTRY_DRAFT_KEY);
+    if (!raw) return { date: null, rows: [] };
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return { date: null, rows: [] };
+    const dateOk =
+      typeof parsed.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date.trim());
+    const date = dateOk ? parsed.date.trim() : null;
+    if (!Array.isArray(parsed.rows)) return { date, rows: [] };
+    const rows = parsed.rows
+      .filter(
+        (r) =>
+          r &&
+          typeof r.locker_item_code === "string" &&
+          r.locker_item_code.trim() !== "" &&
+          typeof r.quantity === "number" &&
+          !Number.isNaN(r.quantity) &&
+          r.quantity > 0
+      )
+      .map((r, i) => ({
+        id: typeof r.id === "number" && r.id > 0 ? r.id : Date.now() + i,
+        locker_item_code: String(r.locker_item_code).trim(),
+        subtype: typeof r.subtype === "string" ? r.subtype : "Standard",
+        quantity: r.quantity,
+      }));
+    return { date, rows };
+  } catch {
+    return { date: null, rows: [] };
+  }
+}
+
 function PlanEntryPage() {
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [rows, setRows] = useState([]);
+  const [date, setDate] = useState(() => {
+    const { date: d } = readPlanEntryDraft();
+    return d ?? new Date().toISOString().slice(0, 10);
+  });
+  const [rows, setRows] = useState(() => readPlanEntryDraft().rows);
   const [form, setForm] = useState({ locker_item_code: "", quantity: "1" });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -15,6 +52,14 @@ function PlanEntryPage() {
   const { data: lockers = [] } = useLockerMaster();
 
   const lockerCodes = useMemo(() => lockers.map((l) => l.locker_code).filter(Boolean), [lockers]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(PLAN_ENTRY_DRAFT_KEY, JSON.stringify({ date, rows }));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [date, rows]);
 
   const addRow = () => {
     if (!form.locker_item_code?.trim()) {
@@ -52,6 +97,7 @@ function PlanEntryPage() {
         rows: rows.map(({ locker_item_code, quantity }) => ({ locker_item_code, quantity })),
       };
       sessionStorage.setItem("mrp_plan_snapshot", JSON.stringify(snapshot));
+      sessionStorage.removeItem(PLAN_ENTRY_DRAFT_KEY);
       await queryClient.invalidateQueries({ queryKey: ["mrpResults"] });
       toast.success("Plan saved. Opening MRP results…");
       navigate("/mrp-calculate", { state: snapshot });

@@ -15,56 +15,74 @@ function Sidebar() {
 
   return (
     <aside
-      className={`hidden h-screen flex-shrink-0 flex-col border-r border-[#810055]/20 bg-[#ffffff] px-3 py-5 font-['GEGHeadline'] transition-all duration-150 md:flex ${
+      className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border bg-card px-3 py-5 font-['GEGHeadline'] transition-all duration-300 md:flex ${
         collapsed ? "w-20" : "w-64"
       }`}
     >
-      <div className="mb-4 border-b border-[#810055]/20 pb-4">
-        {!collapsed ? (
-          <div className="flex flex-col items-center px-1">
-            <img
-              src={godrejLogo}
-              alt="Godrej Logo"
-              className="h-10 object-contain mb-2"
-            />
-            <p className="text-xs font-medium uppercase tracking-widest text-black">
-              MRP System
-            </p>
-          </div>
-        ) : (
-          <div className="flex justify-center">
-            <img
-              src={godrejLogo}
-              alt="Godrej Logo"
-              className="h-7 object-contain"
-            />
-          </div>
-        )}
-      </div>
       <button
         type="button"
         onClick={() => setCollapsed((p) => !p)}
-        className="mb-4 w-full rounded-lg border border-[#810055]/30 px-3 py-2 text-left text-sm font-medium text-black transition-colors duration-150 hover:bg-[#810055] hover:text-white"
+        className="absolute -right-3.5 top-7 z-50 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-neutral shadow-sm transition-all duration-300 hover:border-secondary hover:bg-secondary hover:text-primary focus:outline-none"
+        aria-label="Toggle Sidebar"
       >
-        {collapsed ? "»" : "Collapse"}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2.5}
+          stroke="currentColor"
+          className={`h-3.5 w-3.5 transition-transform duration-300 ${
+            collapsed ? "rotate-180" : ""
+          }`}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+        </svg>
       </button>
-      <nav className="flex flex-1 flex-col gap-1">
+
+      <div className="mb-4 flex min-h-[4rem] flex-col items-center justify-center border-b border-border pb-4 transition-all duration-300">
+        <img
+          src={godrejLogo}
+          alt="Godrej Logo"
+          className={`object-contain transition-all duration-300 ${
+            collapsed ? "h-7" : "mb-2 h-10"
+          }`}
+        />
+        {!collapsed && (
+          <p className="animate-in fade-in text-xs font-semibold uppercase tracking-widest text-neutral duration-300">
+            MRP System
+          </p>
+        )}
+      </div>
+
+      <nav className="mt-2 flex flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden p-1 -mx-1">
         {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ${
+              `group flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm font-medium transition-all duration-200 ${
                 isActive
-                  ? "bg-[#810055] text-white"
-                  : "text-black hover:bg-[#810055] hover:text-white"
+                  ? "bg-secondary text-primary shadow-sm"
+                  : "text-neutral hover:bg-secondary/10 hover:text-secondary"
               }`
             }
           >
-            <span className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-[#810055]/30 bg-white text-[10px] font-bold text-black">
-              {item.icon}
-            </span>
-            {!collapsed && <span>{item.label}</span>}
+            {({ isActive }) => (
+              <>
+                <span
+                  className={`inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border text-[10px] font-bold transition-colors duration-200 ${
+                    isActive
+                      ? "border-primary/30 bg-primary/20 text-primary"
+                      : "border-border bg-card text-neutral group-hover:border-secondary/30 group-hover:bg-secondary/10 group-hover:text-secondary"
+                  }`}
+                >
+                  {item.icon}
+                </span>
+                {!collapsed && (
+                   <span className="truncate whitespace-nowrap">{item.label}</span>
+                )}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>

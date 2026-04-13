@@ -19,28 +19,31 @@ function App() {
   const title = titles[location.pathname] || "Godrej MRP";
 
   return (
-    <div className="min-h-screen bg-page font-sans text-black">
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <main className="min-w-0 flex-1 bg-page">
-          <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-[#810055]/20 bg-white px-4 py-4 shadow-sm md:px-8">
-            <h1 className="text-2xl font-semibold text-black">{title}</h1>
-            <div className="hidden text-xs font-medium uppercase tracking-wide text-black sm:block">
+    <div className="flex h-screen min-h-0 overflow-hidden bg-appbg font-sans text-neutral selection:bg-secondary/20 selection:text-secondary">
+      <Sidebar />
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-appbg">
+        <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between border-b border-border bg-white/90 px-4 py-4 shadow-sm backdrop-blur-md transition-all duration-300 md:px-8">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight text-neutral">{title}</h1>
+          </div>
+          <div className="hidden items-center gap-3 sm:flex">
+            <span className="flex h-2 w-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(129,0,85,0.6)] animate-pulse"></span>
+            <div className="text-xs font-bold uppercase tracking-widest text-secondary">
               Godrej Locker Manufacturing MRP
             </div>
-          </header>
-          <div className="space-y-6 p-4 pb-10 md:p-8">
-            <Routes>
-              <Route path="/" element={<Navigate to="/locker-master" replace />} />
-              <Route path="/locker-master" element={<LockerMasterPage />} />
-              <Route path="/bom-manager" element={<BomManagerPage />} />
-              <Route path="/stock-upload" element={<StockUploadPage />} />
-              <Route path="/plan-entry" element={<PlanEntryPage />} />
-              <Route path="/mrp-calculate" element={<MrpOutputPage />} />
-            </Routes>
           </div>
-        </main>
-      </div>
+        </header>
+        <div className="space-y-6 p-4 pb-10 md:p-8">
+          <Routes>
+            <Route path="/" element={<Navigate to="/locker-master" replace />} />
+            <Route path="/locker-master" element={<LockerMasterPage />} />
+            <Route path="/bom-manager" element={<BomManagerPage />} />
+            <Route path="/stock-upload" element={<StockUploadPage />} />
+            <Route path="/plan-entry" element={<PlanEntryPage />} />
+            <Route path="/mrp-calculate" element={<MrpOutputPage />} />
+          </Routes>
+        </div>
+      </main>
     </div>
   );
 }
