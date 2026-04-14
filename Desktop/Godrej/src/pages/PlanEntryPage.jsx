@@ -14,11 +14,20 @@ function PlanEntryPage() {
   const savePlanMutation = useSavePlan();
   const { data: lockers = [] } = useLockerMaster();
 
-  const lockerCodes = useMemo(() => lockers.map((l) => l.locker_code).filter(Boolean), [lockers]);
+  const lockerOptions = useMemo(
+    () =>
+      lockers
+        .filter((l) => l.locker_code)
+        .map((l) => ({
+          code: l.locker_code,
+          label: [l.product, l.subtype].filter(Boolean).join(" – "),
+        })),
+    [lockers],
+  );
 
   const addRow = () => {
     if (!form.locker_item_code?.trim()) {
-      toast.error("Enter a locker item code");
+      toast.error("Select a locker model");
       return;
     }
     const qty = Number(form.quantity);
@@ -85,20 +94,30 @@ function PlanEntryPage() {
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
           <div className="min-w-0 flex-1">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Locker item code</label>
-            <input
-              list="planLockerCodes"
-              placeholder="Locker Item Code"
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Locker Model</label>
+            <select
               value={form.locker_item_code}
               onChange={(e) => setForm((p) => ({ ...p, locker_item_code: e.target.value }))}
-              className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
-            />
-            <datalist id="planLockerCodes">
-              {lockerCodes.map((c) => (
-                <option key={c} value={c} />
+              className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select Locker Model</option>
+              {lockerOptions.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.label}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
+          {form.locker_item_code && (
+            <div className="min-w-0 flex-1 sm:max-w-xs">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Item Code</label>
+              <input
+                readOnly
+                value={form.locker_item_code}
+                className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-500 outline-none"
+              />
+            </div>
+          )}
           <div className="w-full sm:w-28">
             <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Qty</label>
             <input

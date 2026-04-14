@@ -413,7 +413,7 @@ app.get("/api/mrp/results", async (req, res) => {
       ) AS short_description
     FROM bom_resolved b
     INNER JOIN plan_scope p ON p.locker_item_code = b.match_locker_code
-    LEFT JOIN stock_items s ON regexp_replace(lower(trim(s.item_code)), '\\s+', '', 'g')
+    INNER JOIN stock_items s ON regexp_replace(lower(trim(s.item_code)), '\\s+', '', 'g')
       = regexp_replace(
         lower(trim(COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label))),
         '\\s+',
