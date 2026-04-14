@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 
-function DataTable({ columns, rows, emptyText = "No data available", rowClassName, rowStyle, showSearch = true }) {
+function DataTable({
+  columns,
+  rows,
+  emptyText = "No data available",
+  rowClassName,
+  rowStyle,
+  showSearch = true,
+  searchKeys,
+}) {
   const [query, setQuery] = useState("");
   const defaultSortKey = columns.find((c) => c.sortable !== false)?.key;
   const [sortKey, setSortKey] = useState(defaultSortKey);
@@ -10,7 +18,13 @@ function DataTable({ columns, rows, emptyText = "No data available", rowClassNam
     const q = query.trim().toLowerCase();
     let data = rows;
     if (q) {
-      data = rows.filter((r) => Object.values(r).some((v) => String(v).toLowerCase().includes(q)));
+      data = rows.filter((r) => {
+        const values =
+          Array.isArray(searchKeys) && searchKeys.length
+            ? searchKeys.map((key) => r?.[key])
+            : Object.values(r);
+        return values.some((v) => String(v ?? "").toLowerCase().includes(q));
+      });
     }
     if (sortKey) {
       data = [...data].sort((a, b) => {
@@ -20,7 +34,7 @@ function DataTable({ columns, rows, emptyText = "No data available", rowClassNam
       });
     }
     return data;
-  }, [rows, query, sortKey, sortDir]);
+  }, [rows, query, sortKey, sortDir, searchKeys]);
 
   const toggleSort = (key) => {
     if (sortKey === key) {
@@ -32,30 +46,30 @@ function DataTable({ columns, rows, emptyText = "No data available", rowClassNam
   };
 
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-lg border border-[#810055]/20 bg-white shadow-sm">
       {showSearch && (
-        <div className="flex items-center justify-between gap-3 border-b border-gray-200 p-3">
+        <div className="flex items-center justify-between gap-3 border-b border-[#810055]/20 p-3">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search..."
-            className="h-10 w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-blue-500"
+            className="h-10 w-full max-w-sm rounded-lg border border-[#810055]/30 px-3 py-2 text-sm text-black outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-secondary"
           />
         </div>
       )}
       {filteredRows.length === 0 ? (
-        <div className="p-8 text-center text-sm text-gray-500">{emptyText}</div>
+        <div className="p-8 text-center text-sm text-black">{emptyText}</div>
       ) : (
         <div className="max-h-[430px] overflow-x-auto overflow-y-auto">
-          <table className="min-w-full border-collapse divide-y divide-gray-200 text-sm">
-            <thead className="sticky top-0 z-10 bg-gray-50">
+          <table className="min-w-full border-collapse divide-y divide-[#810055]/20 text-sm">
+            <thead className="sticky top-0 z-10 bg-white">
               <tr>
                 {columns.map((col) => (
                   <th
                     key={col.key}
                     onClick={col.sortable === false ? undefined : () => toggleSort(col.key)}
-                    className={`whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 ${
-                      col.sortable === false ? "" : "cursor-pointer hover:text-gray-700"
+                    className={`whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-black ${
+                      col.sortable === false ? "" : "cursor-pointer hover:text-secondary"
                     }`}
                   >
                     {col.label}
@@ -63,11 +77,11 @@ function DataTable({ columns, rows, emptyText = "No data available", rowClassNam
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 bg-white">
+            <tbody className="divide-y divide-[#810055]/20 bg-white">
               {filteredRows.map((row, idx) => (
                 <tr
                   key={row.id || idx}
-                  className={`transition-colors duration-100 hover:bg-blue-50 ${idx % 2 === 1 ? "bg-gray-50" : "bg-white"} ${
+                  className={`transition-colors duration-100 hover:bg-[#f9ecf5] ${idx % 2 === 1 ? "bg-[#fdf7fb]" : "bg-white"} ${
                     rowClassName ? rowClassName(row) : ""
                   }`}
                   style={rowStyle ? rowStyle(row) : undefined}
@@ -75,7 +89,7 @@ function DataTable({ columns, rows, emptyText = "No data available", rowClassNam
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      className={`px-4 py-3 text-sm text-gray-700 ${col.cellClassName ?? ""}`}
+                      className={`px-4 py-3 text-sm text-black ${col.cellClassName ?? ""}`}
                     >
                       {col.render ? col.render(row[col.key], row) : row[col.key]}
                     </td>

@@ -458,6 +458,13 @@ initDb()
     });
   })
   .catch((e) => {
-    console.error("Failed to initialize database:", e.message);
+    console.error("Failed to initialize database:", e.message || e.code || "");
+    if (e.errors?.length) {
+      for (const sub of e.errors) {
+        console.error(" ", sub.message || sub.code || sub);
+      }
+    } else if (!e.message) {
+      console.error(e);
+    }
     process.exit(1);
   });

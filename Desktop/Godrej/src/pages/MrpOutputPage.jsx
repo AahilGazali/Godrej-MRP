@@ -10,12 +10,12 @@ function StatCard({ title, value, tone = "default" }) {
       ? "border-red-100 bg-red-50"
       : tone === "success"
         ? "border-green-100 bg-green-50"
-        : "border-gray-200 bg-white";
+        : "border-[#810055]/20 bg-white";
   const num =
-    tone === "danger" ? "text-red-600" : tone === "success" ? "text-green-600" : "text-blue-600";
+    tone === "danger" ? "text-red-600" : tone === "success" ? "text-green-600" : "text-secondary";
   return (
     <div className={`rounded-lg border p-5 shadow-sm ${wrap}`}>
-      <p className="text-sm text-gray-500">{title}</p>
+      <p className="text-sm text-black">{title}</p>
       <p className={`mt-1 text-3xl font-bold ${num}`}>{value}</p>
     </div>
   );
@@ -58,15 +58,15 @@ function MrpOutputPage() {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-gray-200 pb-4">
-        <h2 className="text-2xl font-semibold text-gray-900">MRP output</h2>
-        <p className="mt-1 text-sm text-gray-600">Material requirement planning — shortages and coverage by component.</p>
+      <div className="border-b border-[#810055]/20 pb-4">
+        <h2 className="text-2xl font-semibold text-black">MRP output</h2>
+        <p className="mt-1 text-sm text-black">Material requirement planning — shortages and coverage by component.</p>
       </div>
 
       {planSnapshot?.rows?.length > 0 && (
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h3 className="text-lg font-medium text-gray-800">Plan used for this run</h3>
-          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-gray-500">Date: {formatPlanDate(planSnapshot.date)}</p>
+        <section className="rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-medium text-black">Plan used for this run</h3>
+          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-black">Date: {formatPlanDate(planSnapshot.date)}</p>
           <div className="mt-4">
             <DataTable
               showSearch={false}
@@ -126,7 +126,7 @@ function MrpOutputPage() {
             URL.revokeObjectURL(url);
             setDownloading(false);
           }}
-          className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="shrink-0 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
         >
           {downloading ? "Preparing…" : "Download Excel"}
         </button>
@@ -188,23 +188,23 @@ function MrpOutputPage() {
         />
       )}
 
-      <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
         <button
           type="button"
           onClick={() => setShowWarnings((p) => !p)}
-          className="w-full text-left text-sm font-semibold text-gray-800"
+          className="w-full text-left text-sm font-semibold text-black"
         >
           Warnings {showWarnings ? "−" : "+"}
         </button>
         {showWarnings && (
-          <div className="mt-3 text-sm text-gray-600">
+          <div className="mt-3 text-sm text-black">
             {warningItems.length === 0 ? (
               <p>No shortage warnings in the current result set.</p>
             ) : (
               <ul className="list-disc space-y-1 pl-5">
                 {warningItems.map((r) => (
                   <li key={r.item_code}>
-                    <span className="font-medium text-gray-800">{r.item_code}</span> — required{" "}
+                    <span className="font-medium text-black">{r.item_code}</span> — required{" "}
                     {r.required_quantity}, stock {r.stock_available}, short by {Math.abs(r.difference)}.
                   </li>
                 ))}
