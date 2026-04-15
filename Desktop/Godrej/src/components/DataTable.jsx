@@ -8,6 +8,7 @@ function DataTable({
   rowStyle,
   showSearch = true,
   searchKeys,
+  searchAction,
 }) {
   const [query, setQuery] = useState("");
   const defaultSortKey = columns.find((c) => c.sortable !== false)?.key;
@@ -47,14 +48,19 @@ function DataTable({
 
   return (
     <div className="overflow-hidden rounded-lg border border-[#810055]/20 bg-white shadow-sm">
-      {showSearch && (
-        <div className="flex items-center justify-between gap-3 border-b border-[#810055]/20 p-3">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search..."
-            className="h-10 w-full max-w-sm rounded-lg border border-[#810055]/30 px-3 py-2 text-sm text-black outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-secondary"
-          />
+      {(showSearch || searchAction) && (
+        <div className="flex flex-col gap-3 border-b border-[#810055]/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+          {showSearch ? (
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search..."
+              className="h-10 w-full max-w-sm rounded-lg border border-[#810055]/30 px-3 py-2 text-sm text-black outline-none transition-shadow focus:border-transparent focus:ring-2 focus:ring-secondary"
+            />
+          ) : (
+            <div />
+          )}
+          {searchAction ? <div className="shrink-0">{searchAction}</div> : null}
         </div>
       )}
       {filteredRows.length === 0 ? (

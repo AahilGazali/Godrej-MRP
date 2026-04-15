@@ -29,7 +29,7 @@ function App() {
           <div className="hidden items-center gap-3 sm:flex">
             <span className="flex h-2 w-2 rounded-full bg-secondary shadow-[0_0_8px_rgba(129,0,85,0.6)] animate-pulse"></span>
             <div className="text-xs font-bold uppercase tracking-widest text-secondary">
-              Godrej Locker Manufacturing MRP
+              SDLC
             </div>
           </div>
         </header>

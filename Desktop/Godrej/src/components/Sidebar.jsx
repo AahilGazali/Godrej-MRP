@@ -3,11 +3,11 @@ import { NavLink } from "react-router-dom";
 import godrejLogo from "../assets/godrej.png";
 
 const items = [
-  { to: "/locker-master", label: "Locker Master", icon: "LM" },
+  { to: "/locker-master", label: "Product Master", icon: "PM" },
   { to: "/bom-manager", label: "BOM Manager", icon: "BM" },
   { to: "/stock-upload", label: "Stock Upload", icon: "SU" },
-  { to: "/plan-entry", label: "Plan Entry", icon: "PE" },
-  { to: "/mrp-calculate", label: "MRP Calculate", icon: "MC" },
+  { to: "/plan-entry", label: "Daily Plan", icon: "DP" },
+  { to: "/mrp-calculate", label: "MRP", icon: "MC" },
 ];
 
 function Sidebar() {

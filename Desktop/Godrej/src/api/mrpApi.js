@@ -10,6 +10,11 @@ export const addLocker = async (payload) => {
   return data;
 };
 
+export const updateLocker = async ({ id, ...payload }) => {
+  const { data } = await client.put(`/lockers/${id}`, payload);
+  return data;
+};
+
 export const uploadLockerRows = async ({ fileName, rows }) => {
   const { data } = await client.post("/lockers/upload", { fileName, rows });
   return data;

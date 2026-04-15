@@ -7,6 +7,10 @@ import { useQueryClient } from "@tanstack/react-query";
 
 const PLAN_ENTRY_DRAFT_KEY = "plan_entry_draft";
 
+function normalizeLockerCode(value) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
 function readPlanEntryDraft() {
   try {
     const raw = sessionStorage.getItem(PLAN_ENTRY_DRAFT_KEY);
@@ -49,9 +53,17 @@ function PlanEntryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const savePlanMutation = useSavePlan();
-  const { data: lockers = [] } = useLockerMaster();
+  const { data: lockers = [], isLoading: lockersLoading } = useLockerMaster();
 
   const lockerCodes = useMemo(() => lockers.map((l) => l.locker_code).filter(Boolean), [lockers]);
+  const lockerCodeMap = useMemo(() => {
+    const map = new Map();
+    for (const code of lockerCodes) {
+      const normalized = normalizeLockerCode(code);
+      if (normalized) map.set(normalized, code);
+    }
+    return map;
+  }, [lockerCodes]);
 
   useEffect(() => {
     try {
@@ -62,8 +74,24 @@ function PlanEntryPage() {
   }, [date, rows]);
 
   const addRow = () => {
-    if (!form.locker_item_code?.trim()) {
+    const enteredCode = String(form.locker_item_code ?? "").trim();
+    if (!enteredCode) {
       toast.error("Select a locker model");
+      return;
+    }
+    if (lockersLoading) {
+      toast.error("Locker Master is still loading. Try again in a moment.");
+      return;
+    }
+    const normalizedCode = normalizeLockerCode(enteredCode);
+    const matchedLockerCode = lockerCodeMap.get(normalizedCode);
+    if (!matchedLockerCode) {
+      toast.error("Locker item code does not exist in Locker Master");
+      return;
+    }
+    const alreadyAdded = rows.some((row) => normalizeLockerCode(row.locker_item_code) === normalizedCode);
+    if (alreadyAdded) {
+      toast.error("This locker item code has already been added");
       return;
     }
     const qty = Number(form.quantity);
@@ -75,7 +103,7 @@ function PlanEntryPage() {
       ...prev,
       {
         id: Date.now(),
-        locker_item_code: form.locker_item_code.trim(),
+        locker_item_code: matchedLockerCode,
         subtype: "Standard",
         quantity: qty,
       },
@@ -90,6 +118,22 @@ function PlanEntryPage() {
       toast.error("Select a date and add at least one locker line");
       return;
     }
+    const invalidRow = rows.find((row) => !lockerCodeMap.has(normalizeLockerCode(row.locker_item_code)));
+    if (invalidRow) {
+      toast.error(`Locker item code \"${invalidRow.locker_item_code}\" does not exist in Locker Master`);
+      return;
+    }
+    const seenCodes = new Set();
+    const duplicateRow = rows.find((row) => {
+      const normalizedCode = normalizeLockerCode(row.locker_item_code);
+      if (seenCodes.has(normalizedCode)) return true;
+      seenCodes.add(normalizedCode);
+      return false;
+    });
+    if (duplicateRow) {
+      toast.error(`Locker item code \"${duplicateRow.locker_item_code}\" is duplicated in the plan`);
+      return;
+    }
     try {
       await savePlanMutation.mutateAsync({ date, rows });
       const snapshot = {
@@ -102,7 +146,7 @@ function PlanEntryPage() {
       toast.success("Plan saved. Opening MRP results…");
       navigate("/mrp-calculate", { state: snapshot });
     } catch (error) {
-      toast.error(error?.message || "Failed to save plan");
+      toast.error(error?.response?.data?.message || error?.message || "Failed to save plan");
     }
   };
 

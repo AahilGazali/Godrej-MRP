@@ -12,6 +12,71 @@ app.get("/api/health", async (_req, res) => {
   res.json({ ok: true, now: rows[0].now });
 });
 
+async function findMissingBomLockerCodes(planRows = []) {
+  const lockerCodes = [
+    ...new Set(
+      planRows
+        .map((row) => String(row?.locker_item_code ?? "").trim())
+        .filter(Boolean)
+    ),
+  ];
+
+  if (lockerCodes.length === 0) {
+    return [];
+  }
+
+  const { rows } = await pool.query(
+    `WITH requested_codes AS (
+      SELECT DISTINCT TRIM(code) AS locker_item_code
+      FROM unnest($1::text[]) AS code
+    ),
+    combined_bom AS (
+      SELECT TRIM(locker_model) AS locker_model FROM bom_items
+      UNION
+      SELECT TRIM(locker_model) AS locker_model FROM bom_uploaded_rows
+    )
+    SELECT r.locker_item_code
+    FROM requested_codes r
+    LEFT JOIN lockers l ON TRIM(l.locker_item_code) = r.locker_item_code
+    WHERE l.id IS NULL
+      OR NOT EXISTS (
+        SELECT 1
+        FROM combined_bom b
+        WHERE LOWER(TRIM(b.locker_model)) = LOWER(TRIM(l.model))
+          OR (COALESCE(l.subtype, '') <> '' AND LOWER(TRIM(b.locker_model)) = LOWER(TRIM(l.subtype)))
+          OR (COALESCE(l.product, '') <> '' AND LOWER(TRIM(b.locker_model)) = LOWER(TRIM(l.product)))
+          OR LOWER(TRIM(b.locker_model)) = LOWER(TRIM(l.description))
+          OR LOWER(TRIM(b.locker_model)) = LOWER(TRIM(l.locker_item_code))
+          OR regexp_replace(LOWER(TRIM(b.locker_model)), '\\s+', '', 'g') = regexp_replace(LOWER(TRIM(l.model)), '\\s+', '', 'g')
+          OR (COALESCE(l.subtype, '') <> '' AND regexp_replace(LOWER(TRIM(b.locker_model)), '\\s+', '', 'g') = regexp_replace(LOWER(TRIM(l.subtype)), '\\s+', '', 'g'))
+          OR (COALESCE(l.product, '') <> '' AND regexp_replace(LOWER(TRIM(b.locker_model)), '\\s+', '', 'g') = regexp_replace(LOWER(TRIM(l.product)), '\\s+', '', 'g'))
+          OR regexp_replace(LOWER(TRIM(b.locker_model)), '[^a-z0-9]+', '', 'g') = regexp_replace(
+            LOWER(TRIM(COALESCE(l.product, '') || COALESCE(l.subtype, ''))), '[^a-z0-9]+', '', 'g'
+          )
+          OR regexp_replace(LOWER(TRIM(b.locker_model)), '[^a-z0-9]+', '', 'g') = regexp_replace(
+            LOWER(TRIM(COALESCE(l.product, '') || ' ' || COALESCE(l.subtype, ''))), '[^a-z0-9]+', '', 'g'
+          )
+          OR regexp_replace(LOWER(TRIM(b.locker_model)), '[^a-z0-9]+', '', 'g') = regexp_replace(
+            LOWER(TRIM(COALESCE(l.subtype, '') || COALESCE(l.product, ''))), '[^a-z0-9]+', '', 'g'
+          )
+          OR (
+            length(regexp_replace(LOWER(TRIM(b.locker_model)), '[^a-z0-9]+', '', 'g')) >= 3
+            AND regexp_replace(LOWER(TRIM(COALESCE(l.product, '') || COALESCE(l.subtype, ''))), '[^a-z0-9]+', '', 'g')
+              LIKE '%' || regexp_replace(LOWER(TRIM(b.locker_model)), '[^a-z0-9]+', '', 'g') || '%'
+          )
+          OR (
+            length(regexp_replace(LOWER(TRIM(b.locker_model)), '[^a-z0-9]+', '', 'g')) >= 3
+            AND regexp_replace(LOWER(TRIM(b.locker_model)), '[^a-z0-9]+', '', 'g')
+              LIKE '%' || regexp_replace(LOWER(TRIM(COALESCE(l.product, '') || COALESCE(l.subtype, ''))), '[^a-z0-9]+', '', 'g') || '%'
+          )
+      )
+    ORDER BY r.locker_item_code`,
+    [lockerCodes]
+  );
+
+  return rows.map((row) => row.locker_item_code);
+}
+
 app.get("/api/lockers", async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT
@@ -40,6 +105,53 @@ app.post("/api/lockers", async (req, res) => {
     [locker_code, subtype, product, product, subtype]
   );
   res.status(201).json(rows[0]);
+});
+
+app.put("/api/lockers/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const { product, subtype, locker_code } = req.body;
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ message: "Valid locker id is required" });
+  }
+  if (!product || !subtype || !locker_code) {
+    return res.status(400).json({ message: "Product, SubType and Locker code are required" });
+  }
+
+  const duplicate = await pool.query(
+    "SELECT id FROM lockers WHERE locker_item_code = $1 AND id <> $2 LIMIT 1",
+    [locker_code, id]
+  );
+  if (duplicate.rowCount > 0) {
+    return res.status(409).json({ message: "Locker code already exists" });
+  }
+
+  const current = await pool.query("SELECT locker_item_code FROM lockers WHERE id = $1", [id]);
+  if (current.rowCount === 0) {
+    return res.status(404).json({ message: "Locker not found" });
+  }
+
+  const previousLockerCode = current.rows[0].locker_item_code;
+  const { rows } = await pool.query(
+    `UPDATE lockers
+     SET locker_item_code = $1,
+         model = $2,
+         description = $3,
+         product = $4,
+         subtype = $5
+     WHERE id = $6
+     RETURNING id, COALESCE(product, description) AS product, COALESCE(subtype, model) AS subtype, locker_item_code AS locker_code`,
+    [locker_code, subtype, product, product, subtype, id]
+  );
+
+  if (previousLockerCode !== locker_code) {
+    await pool.query(
+      "UPDATE plan_entries SET locker_item_code = $1, subtype = $2 WHERE locker_item_code = $3",
+      [locker_code, subtype, previousLockerCode]
+    );
+  }
+
+  res.json(rows[0]);
 });
 
 app.post("/api/lockers/upload", async (req, res) => {
@@ -75,6 +187,7 @@ app.delete("/api/lockers/:lockerCode", async (req, res) => {
   if (!lockerCode) {
     return res.status(400).json({ message: "lockerCode is required" });
   }
+  await pool.query("DELETE FROM plan_entries WHERE locker_item_code = $1", [lockerCode]);
   const { rowCount } = await pool.query("DELETE FROM lockers WHERE locker_item_code = $1", [lockerCode]);
   res.json({ success: true, deleted: rowCount });
 });
@@ -282,6 +395,15 @@ app.post("/api/uploads", async (req, res) => {
 
 app.post("/api/plan", async (req, res) => {
   const { date, rows = [] } = req.body;
+
+  const missingBomCodes = await findMissingBomLockerCodes(rows);
+  if (missingBomCodes.length > 0) {
+    return res.status(400).json({
+      message: `Following item codes do not have BOM: ${missingBomCodes.join(", ")}. Please add BOM before calculating.`,
+      missingBomCodes,
+    });
+  }
+
   await pool.query("DELETE FROM plan_entries WHERE plan_date = $1", [date]);
   for (const row of rows) {
     await pool.query(
@@ -395,20 +517,20 @@ app.get("/api/mrp/results", async (req, res) => {
     )
     SELECT
       ROW_NUMBER() OVER (
-        ORDER BY p.locker_item_code, b.locker_model, b.source_type, b.source_id, COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label)
+        ORDER BY MIN(COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label))
       ) AS line_no,
       COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label) AS item_code,
-      COALESCE((b.qty * p.quantity), 0) AS required_quantity,
-      COALESCE(s.stock_qty, 0) AS stock_available,
-      NULLIF(TRIM(s.stock_material), '') AS material,
+      SUM(COALESCE((b.qty * p.quantity), 0)) AS required_quantity,
+      MAX(COALESCE(s.stock_qty, 0)) AS stock_available,
+      NULLIF(TRIM(MAX(s.stock_material)), '') AS material,
       COALESCE(
-        NULLIF(TRIM(s.ln_description), ''),
-        NULLIF(TRIM(b.bom_description), ''),
+        NULLIF(TRIM(MAX(s.ln_description)), ''),
+        NULLIF(TRIM(MAX(b.bom_description)), ''),
         ''
       ) AS ln_description,
       COALESCE(
-        NULLIF(TRIM(s.short_description), ''),
-        NULLIF(TRIM(b.bom_drawing_no), ''),
+        NULLIF(TRIM(MAX(s.short_description)), ''),
+        NULLIF(TRIM(MAX(b.bom_drawing_no)), ''),
         ''
       ) AS short_description
     FROM bom_resolved b
@@ -420,6 +542,7 @@ app.get("/api/mrp/results", async (req, res) => {
         '',
         'g'
       )
+    GROUP BY COALESCE(NULLIF(TRIM(b.item_code), ''), b.material_label)
     ORDER BY line_no
   `;
 
@@ -468,3 +591,4 @@ initDb()
     }
     process.exit(1);
   });
+  

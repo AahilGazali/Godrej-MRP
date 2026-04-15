@@ -2,19 +2,21 @@ import { useMemo, useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import DataTable from "../components/DataTable";
 import SkeletonTable from "../components/SkeletonTable";
-import { useMrpResults } from "../hooks/useMrpData";
+import { useLockerMaster, useMrpResults } from "../hooks/useMrpData";
 
 function StatCard({ title, value, tone = "default" }) {
   const wrap =
     tone === "danger"
-      ? "border-red-100 bg-red-50"
+      ? "border-[#810055]/40 bg-red-50"
       : tone === "success"
-        ? "border-green-100 bg-green-50"
-        : "border-[#810055]/20 bg-white";
+        ? "border-[#008000]/40 bg-green-50"
+        : "border-[#810055]/40 bg-white";
   const num =
     tone === "danger" ? "text-red-600" : tone === "success" ? "text-green-600" : "text-secondary";
   return (
-    <div className={`rounded-lg border p-5 shadow-sm ${wrap}`}>
+    <div className={`rounded-lg border p-5 shadow-sm ${wrap}
+    transition-all duration-300 ease-in-out
+    hover:shadow-md hover:-translate-y-1 hover:scale-[1.02] cursor-pointer`}>
       <p className="text-sm text-black">{title}</p>
       <p className={`mt-1 text-3xl font-bold ${num}`}>{value}</p>
     </div>
@@ -28,9 +30,16 @@ function formatPlanDate(iso) {
   return `${d}-${m}-${y}`;
 }
 
+function getSubtypeMultiplier(subtype) {
+  const match = String(subtype ?? "").match(/(\d+)/);
+  const value = match ? Number(match[1]) : 1;
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
 function MrpOutputPage() {
   const location = useLocation();
   const { data = [], isLoading } = useMrpResults();
+  const { data: lockers = [] } = useLockerMaster();
   const [showWarnings, setShowWarnings] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [planSnapshot, setPlanSnapshot] = useState(null);
@@ -51,10 +60,66 @@ function MrpOutputPage() {
   const stats = useMemo(() => {
     const shortages = data.filter((d) => d.status === "LOW").length;
     const ok = data.filter((d) => d.status === "OK").length;
-    return { total: data.length, shortages, ok };
-  }, [data]);
+    const lockerMap = new Map(
+      lockers.map((locker) => [String(locker.locker_code ?? "").trim().toLowerCase(), locker])
+    );
+
+    const planRows = Array.isArray(planSnapshot?.rows) ? planSnapshot.rows : [];
+    const totals = planRows.reduce(
+      (acc, row) => {
+        const quantity = Number(row.quantity) || 0;
+        if (quantity <= 0) return acc;
+
+        acc.totalLockers += quantity;
+        const key = String(row.locker_item_code ?? "").trim().toLowerCase();
+        const subtype = lockerMap.get(key)?.subtype;
+        acc.totalBoxes += quantity * getSubtypeMultiplier(subtype);
+        return acc;
+      },
+      { totalLockers: 0, totalBoxes: 0 }
+    );
+
+    return { total: data.length, shortages, ok, ...totals };
+  }, [data, lockers, planSnapshot]);
 
   const warningItems = useMemo(() => data.filter((d) => d.status === "LOW").slice(0, 10), [data]);
+
+  const handleDownload = () => {
+    setDownloading(true);
+    const headers = [
+      "SR NO.",
+      "ITEM CODE",
+      "Material",
+      "LN Description",
+      "Short Description",
+      "required_quantity",
+      "stock_available",
+      "difference",
+      "status",
+    ];
+    const lines = data.map((r) =>
+      [
+        r.sr_no,
+        r.item_code,
+        r.material,
+        r.ln_description,
+        r.short_description,
+        r.required_quantity,
+        r.stock_available,
+        r.difference,
+        r.status,
+      ].join(",")
+    );
+    const csv = [headers.join(","), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mrp-output-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setDownloading(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -81,61 +146,28 @@ function MrpOutputPage() {
         </section>
       )}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard title="Total materials" value={stats.total} />
-          <StatCard title="Shortages" value={stats.shortages} tone="danger" />
-          <StatCard title="OK" value={stats.ok} tone="success" />
-        </div>
-        <button
-          type="button"
-          disabled={downloading || isLoading || data.length === 0}
-          onClick={() => {
-            setDownloading(true);
-            const headers = [
-              "SR NO.",
-              "ITEM CODE",
-              "Material",
-              "LN Description",
-              "Short Description",
-              "required_quantity",
-              "stock_available",
-              "difference",
-              "status",
-            ];
-            const lines = data.map((r) =>
-              [
-                r.sr_no,
-                r.item_code,
-                r.material,
-                r.ln_description,
-                r.short_description,
-                r.required_quantity,
-                r.stock_available,
-                r.difference,
-                r.status,
-              ].join(",")
-            );
-            const csv = [headers.join(","), ...lines].join("\n");
-            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `mrp-output-${new Date().toISOString().slice(0, 10)}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
-            setDownloading(false);
-          }}
-          className="shrink-0 rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {downloading ? "Preparing…" : "Download Excel"}
-        </button>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard title="Total materials" value={stats.total} />
+        <StatCard title="Shortages" value={stats.shortages} tone="danger" />
+        <StatCard title="OK" value={stats.ok} tone="success" />
+        <StatCard title="Total Lockers" value={stats.totalLockers} />
+        <StatCard title="Total Boxes" value={stats.totalBoxes} />
       </div>
 
       {isLoading ? (
         <SkeletonTable />
       ) : (
         <DataTable
+          searchAction={
+            <button
+              type="button"
+              disabled={downloading || isLoading || data.length === 0}
+              onClick={handleDownload}
+              className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {downloading ? "Preparing…" : "Download Excel"}
+            </button>
+          }
           columns={[
             { key: "sr_no", label: "SR NO.", sortable: false },
             { key: "item_code", label: "ITEM CODE" },

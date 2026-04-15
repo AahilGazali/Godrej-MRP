@@ -10,6 +10,7 @@ import {
   fetchMrpResults,
   fetchUploads,
   savePlanEntries,
+  updateLocker,
   uploadBomRows,
   uploadLockerRows,
   uploadStockRows,
@@ -74,7 +75,20 @@ function normalizeKey(value) {
     .replace(/\s+/g, "");
 }
 
-/** Parse header cell as calendar date (Excel serial, Date, or dd-mm-yy string). */
+function makeCalendarDate(year, month, day) {
+  const date = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+/** Parse header cell as calendar date (Excel serial, Date, or common sheet date string). */
 function headerCellToDate(cell) {
   if (cell instanceof Date && !Number.isNaN(cell.getTime())) {
     return new Date(cell.getFullYear(), cell.getMonth(), cell.getDate());
@@ -87,14 +101,36 @@ function headerCellToDate(cell) {
   }
   const s = String(cell ?? "").trim();
   if (!s || s === "#####") return null;
-  const m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+  const iso = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (iso) {
+    const yyyy = parseInt(iso[1], 10);
+    const mm = parseInt(iso[2], 10);
+    const dd = parseInt(iso[3], 10);
+    return makeCalendarDate(yyyy, mm, dd);
+  }
+  const m = s.match(/^(\d{1,2})([-/.])(\d{1,2})\2(\d{2,4})$/);
   if (m) {
-    let dd = parseInt(m[1], 10);
-    let mm = parseInt(m[2], 10);
-    let yyyy = parseInt(m[3], 10);
+    const first = parseInt(m[1], 10);
+    const second = parseInt(m[3], 10);
+    const separator = m[2];
+    let yyyy = parseInt(m[4], 10);
     if (yyyy < 100) yyyy += 2000;
-    const d = new Date(yyyy, mm - 1, dd);
-    return Number.isNaN(d.getTime()) ? null : d;
+    let dd;
+    let mm;
+    if (first > 12 && second <= 12) {
+      dd = first;
+      mm = second;
+    } else if (second > 12 && first <= 12) {
+      mm = first;
+      dd = second;
+    } else if (separator === "/") {
+      mm = first;
+      dd = second;
+    } else {
+      dd = first;
+      mm = second;
+    }
+    return makeCalendarDate(yyyy, mm, dd);
   }
   return null;
 }
@@ -114,6 +150,26 @@ function findItemColumnIndex(headers) {
     if (nk === "itemcod" || nk === "itemcode") return i;
     if (nk.includes("item") && (nk.includes("cod") || nk.includes("code"))) return i;
     if (nk === "item" || nk === "code") return i;
+  }
+  return -1;
+}
+
+function findPurchaseCodeColumnIndex(headers) {
+  for (let i = 0; i < headers.length; i++) {
+    const nk = normalizeKey(headers[i]);
+    if (!nk) continue;
+    if (nk === "purchasecode" || nk === "purchasecod") return i;
+    if (nk.includes("purchase") && (nk.includes("cod") || nk.includes("code"))) return i;
+  }
+  return -1;
+}
+
+function findVdcCodeColumnIndex(headers) {
+  for (let i = 0; i < headers.length; i++) {
+    const nk = normalizeKey(headers[i]);
+    if (!nk) continue;
+    if (nk === "vdccode" || nk === "vdccod") return i;
+    if (nk.includes("vdc") && (nk.includes("cod") || nk.includes("code"))) return i;
   }
   return -1;
 }
@@ -150,7 +206,13 @@ function findStockHeaderRowIndex(grid) {
   for (let i = 0; i < max; i++) {
     const row = grid[i];
     if (!Array.isArray(row) || !row.length) continue;
-    if (findItemColumnIndex(row) >= 0) return i;
+    if (
+      findItemColumnIndex(row) >= 0 ||
+      findPurchaseCodeColumnIndex(row) >= 0 ||
+      findVdcCodeColumnIndex(row) >= 0
+    ) {
+      return i;
+    }
   }
   return 0;
 }
@@ -173,7 +235,12 @@ function pickStockGrid(workbook) {
     const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", blankrows: false, raw: false });
     if (!grid.length) continue;
     const headerRowIndex = findStockHeaderRowIndex(grid);
-    if (findItemColumnIndex(grid[headerRowIndex]) >= 0) {
+    const headerRow = grid[headerRowIndex] || [];
+    if (
+      findItemColumnIndex(headerRow) >= 0 ||
+      findPurchaseCodeColumnIndex(headerRow) >= 0 ||
+      findVdcCodeColumnIndex(headerRow) >= 0
+    ) {
       return { grid, headerRowIndex };
     }
   }
@@ -251,13 +318,21 @@ function parseStockSheetFromXlsx(buffer, selectedIsoDate) {
   const { grid, headerRowIndex } = picked;
   const headerRow = grid[headerRowIndex];
   const itemCol = findItemColumnIndex(headerRow);
-  if (itemCol < 0) {
-    return { stockRows: [], dateColumnLabel: null, usedFallback: false, error: "No ITEM CODE column found (expected e.g. ITEM COD / Item Code)" };
+  const purchaseCodeCol = findPurchaseCodeColumnIndex(headerRow);
+  const vdcCodeCol = findVdcCodeColumnIndex(headerRow);
+  const primaryCodeCol = purchaseCodeCol >= 0 ? purchaseCodeCol : itemCol >= 0 ? itemCol : vdcCodeCol;
+  if (primaryCodeCol < 0) {
+    return {
+      stockRows: [],
+      dateColumnLabel: null,
+      usedFallback: false,
+      error: "No stock code column found (expected ITEM CODE, Purchase Code, or VDC Code)",
+    };
   }
 
   const dateCandidates = [];
   for (let c = 0; c < headerRow.length; c++) {
-    if (c === itemCol) continue;
+    if (c === itemCol || c === purchaseCodeCol || c === vdcCodeCol) continue;
     const d = headerCellToDate(headerRow[c]);
     if (d) dateCandidates.push({ col: c, date: d, raw: headerRow[c] });
   }
@@ -274,6 +349,25 @@ function parseStockSheetFromXlsx(buffer, selectedIsoDate) {
       dateColumnLabel = String(exact.raw ?? "").trim() || exact.date.toISOString().slice(0, 10);
     } else {
       const latest = dateCandidates.reduce((a, b) => (a.date > b.date ? a : b));
+      const latestHasData = grid.slice(headerRowIndex + 1).some((row) => {
+        const purchaseCode = normalizeStockItemCode(row[purchaseCodeCol]);
+        const itemCode = normalizeStockItemCode(row[itemCol]);
+        const vdcCode = normalizeStockItemCode(row[vdcCodeCol]);
+        if (!purchaseCode && !itemCode && !vdcCode) return false;
+        const raw = row[latest.col];
+        if (raw === "" || raw === "-" || raw === null || raw === undefined) return false;
+        const stock = typeof raw === "number" ? raw : Number(String(raw).replace(/,/g, ""));
+        return !Number.isNaN(stock);
+      });
+      if (!latestHasData) {
+        return {
+          stockRows: [],
+          dateColumnLabel: null,
+          usedFallback: false,
+          error:
+            "No stock values found for the latest date column. The stock file may not be updated yet for this date. Please select a specific date that matches a column in your sheet.",
+        };
+      }
       qtyCol = latest.col;
       usedFallback = true;
       dateColumnLabel = String(latest.raw ?? "").trim() || latest.date.toISOString().slice(0, 10);
@@ -282,7 +376,7 @@ function parseStockSheetFromXlsx(buffer, selectedIsoDate) {
 
   if (qtyCol < 0) {
     for (let c = headerRow.length - 1; c >= 0; c--) {
-      if (c === itemCol) continue;
+      if (c === itemCol || c === purchaseCodeCol || c === vdcCodeCol) continue;
       const sample = grid.slice(1, 6).map((row) => row[c]);
       const numericish = sample.some((v) => v !== "" && v !== "-" && !Number.isNaN(Number(String(v).replace(/,/g, ""))));
       if (numericish) {
@@ -330,8 +424,6 @@ function parseStockSheetFromXlsx(buffer, selectedIsoDate) {
   const stockRows = [];
   for (let r = headerRowIndex + 1; r < grid.length; r++) {
     const row = grid[r];
-    const item_code = normalizeStockItemCode(row[itemCol]);
-    if (!item_code) continue;
     let raw = row[qtyCol];
     if (raw === "" || raw === "-" || raw === null || raw === undefined) continue;
     const stock = typeof raw === "number" ? raw : Number(String(raw).replace(/,/g, ""));
@@ -344,7 +436,15 @@ function parseStockSheetFromXlsx(buffer, selectedIsoDate) {
       short_description: cellAt(row, shortDescCol),
       uom: cellAt(row, uomCol),
     };
-    stockRows.push({ item_code, stock, ...meta });
+    const purchaseCode = normalizeStockItemCode(row[purchaseCodeCol >= 0 ? purchaseCodeCol : primaryCodeCol]);
+    const vdcCode = normalizeStockItemCode(row[vdcCodeCol]);
+    if (!purchaseCode && !vdcCode) continue;
+    if (purchaseCode) {
+      stockRows.push({ item_code: purchaseCode, stock, ...meta });
+    }
+    if (vdcCode) {
+      stockRows.push({ item_code: vdcCode, stock, ...meta });
+    }
   }
 
   return { stockRows, dateColumnLabel, usedFallback };
@@ -498,6 +598,11 @@ export const useAddLocker = () =>
 export const useDeleteLocker = () =>
   useMutation({
     mutationFn: deleteLocker,
+  });
+
+export const useUpdateLocker = () =>
+  useMutation({
+    mutationFn: updateLocker,
   });
 
 export const useAddCustomBom = () =>
