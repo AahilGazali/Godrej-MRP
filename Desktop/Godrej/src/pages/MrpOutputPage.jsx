@@ -110,7 +110,29 @@ function MrpOutputPage() {
         r.status,
       ].join(",")
     );
-    const csv = [headers.join(","), ...lines].join("\n");
+    // --- existing first table ---
+    const firstTable = [headers.join(","), ...lines];
+
+    // --- spacer (blank lines) ---
+    const spacer = ["", "", ""]; // 3 blank lines (adjust if needed)
+
+    // --- second table (Plan Snapshot) ---
+    const secondHeaders = ["Locker Item Code", "Quantity"];
+
+    const secondLines = (planSnapshot?.rows || []).map((r) =>
+      [
+        r.locker_item_code ?? "",
+        r.quantity ?? "",
+      ].join(",")
+    );
+
+    const secondTable =
+      secondLines.length > 0
+        ? [secondHeaders.join(","), ...secondLines]
+        : [];
+
+    // --- final CSV ---
+    const csv = [...firstTable, ...spacer, ...secondTable].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
