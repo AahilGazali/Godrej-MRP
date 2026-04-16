@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import DataTable from "../components/DataTable";
 import SkeletonTable from "../components/SkeletonTable";
 import FileDropzone from "../components/FileDropzone";
-import { useAddCustomBom, useBom, useFileUpload } from "../hooks/useMrpData";
+import { useAddCustomBom, useBom, useDeleteBomRow, useFileUpload, useUpdateBomRow } from "../hooks/useMrpData";
 import toast from "react-hot-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -10,6 +10,8 @@ function BomManagerPage() {
   const { data = [], isLoading } = useBom();
   const queryClient = useQueryClient();
   const addCustomBomMutation = useAddCustomBom();
+  const updateBomRowMutation = useUpdateBomRow();
+  const deleteBomRowMutation = useDeleteBomRow();
   const uploadMutation = useFileUpload();
   const [lockerModel, setLockerModel] = useState("All");
   const [type, setType] = useState("All");
@@ -18,6 +20,9 @@ function BomManagerPage() {
   const [selectedCustomModel, setSelectedCustomModel] = useState("");
   const [step, setStep] = useState(1);
   const [lastUploadInfo, setLastUploadInfo] = useState(null);
+  const [editingRowKey, setEditingRowKey] = useState("");
+  const [editingForm, setEditingForm] = useState(null);
+  const [deleteModalRow, setDeleteModalRow] = useState(null);
 
   const mergedRows = data;
   const models = useMemo(() => {
@@ -33,6 +38,97 @@ function BomManagerPage() {
     (acc[row.locker_model] = acc[row.locker_model] || []).push(row);
     return acc;
   }, {});
+  const tableColumns = [
+    { key: "level", label: "Level" },
+    { key: "position", label: "Position" },
+    { key: "item_code", label: "Item Code" },
+    { key: "description", label: "Description" },
+    { key: "drawing_no", label: "Drawing No" },
+    { key: "drawing_rev_no", label: "Drawing Rev No" },
+    { key: "op", label: "Op?" },
+    { key: "warehouse", label: "Warehouse" },
+    { key: "use_pnt_wh", label: "Use Pnt wh" },
+    { key: "entrp_unit", label: "Entrp Unit" },
+    { key: "lot_sel", label: "Lot/sel" },
+    { key: "revision", label: "Revision" },
+    { key: "effective_date", label: "Effective Date" },
+    { key: "expiry_date", label: "Expiry Date" },
+    { key: "length_mm", label: "length(mm)" },
+    { key: "width_mm", label: "Width(mm)" },
+    { key: "number_of_units", label: "Number of Units" },
+    { key: "inv_unit", label: "Inv Unit" },
+    { key: "net_quantity", label: "Net Quantity" },
+    { key: "scrap_percent", label: "Scrap(%)" },
+    { key: "scrap_quantity", label: "Scrap Quantity" },
+    { key: "extra_info", label: "Extra Info" },
+    { key: "bom_type", label: "BOM Type" },
+  ];
+
+  const startRowEdit = (row) => {
+    setEditingRowKey(`${row.row_source}:${row.id}`);
+    setEditingForm({
+      level: row.level ?? "",
+      position: row.position ?? "",
+      item_code: row.item_code ?? "",
+      description: row.description ?? "",
+      drawing_no: row.drawing_no ?? "",
+      drawing_rev_no: row.drawing_rev_no ?? "",
+      op: row.op ?? "",
+      warehouse: row.warehouse ?? "",
+      use_pnt_wh: row.use_pnt_wh ?? "",
+      entrp_unit: row.entrp_unit ?? "",
+      lot_sel: row.lot_sel ?? "",
+      revision: row.revision ?? "",
+      effective_date: row.effective_date ?? "",
+      expiry_date: row.expiry_date ?? "",
+      length_mm: row.length_mm ?? "",
+      width_mm: row.width_mm ?? "",
+      number_of_units: row.number_of_units ?? "",
+      inv_unit: row.inv_unit ?? "",
+      net_quantity: row.net_quantity ?? "",
+      scrap_percent: row.scrap_percent ?? "",
+      scrap_quantity: row.scrap_quantity ?? "",
+      extra_info: row.extra_info ?? "",
+      bom_type: row.bom_type ?? "",
+      component_type: row.component_type ?? "",
+    });
+  };
+
+  const cancelRowEdit = () => {
+    setEditingRowKey("");
+    setEditingForm(null);
+  };
+
+  const saveRowEdit = async (row) => {
+    if (!editingForm) return;
+    try {
+      await updateBomRowMutation.mutateAsync({
+        source: row.row_source,
+        id: row.id,
+        payload: editingForm,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["bomData"] });
+      cancelRowEdit();
+      toast.success("BOM row updated");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.message || "Failed to update BOM row");
+    }
+  };
+
+  const confirmDeleteRow = async () => {
+    if (!deleteModalRow) return;
+    try {
+      await deleteBomRowMutation.mutateAsync({ source: deleteModalRow.row_source, id: deleteModalRow.id });
+      await queryClient.invalidateQueries({ queryKey: ["bomData"] });
+      if (editingRowKey === `${deleteModalRow.row_source}:${deleteModalRow.id}`) {
+        cancelRowEdit();
+      }
+      setDeleteModalRow(null);
+      toast.success("BOM row deleted");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.message || "Failed to delete BOM row");
+    }
+  };
 
   const saveCustomBom = () => {
     if (!selectedCustomModel) {
@@ -134,29 +230,62 @@ function BomManagerPage() {
                 <h3 className="mb-3 text-lg font-medium text-black">Locker Model: {model}</h3>
                 <DataTable
                   columns={[
-                    { key: "level", label: "Level" },
-                    { key: "position", label: "Position" },
-                    { key: "item_code", label: "Item Code" },
-                    { key: "description", label: "Description" },
-                    { key: "drawing_no", label: "Drawing No" },
-                    { key: "drawing_rev_no", label: "Drawing Rev No" },
-                    { key: "op", label: "Op?" },
-                    { key: "warehouse", label: "Warehouse" },
-                    { key: "use_pnt_wh", label: "Use Pnt wh" },
-                    { key: "entrp_unit", label: "Entrp Unit" },
-                    { key: "lot_sel", label: "Lot/sel" },
-                    { key: "revision", label: "Revision" },
-                    { key: "effective_date", label: "Effective Date" },
-                    { key: "expiry_date", label: "Expiry Date" },
-                    { key: "length_mm", label: "length(mm)" },
-                    { key: "width_mm", label: "Width(mm)" },
-                    { key: "number_of_units", label: "Number of Units" },
-                    { key: "inv_unit", label: "Inv Unit" },
-                    { key: "net_quantity", label: "Net Quantity" },
-                    { key: "scrap_percent", label: "Scrap(%)" },
-                    { key: "scrap_quantity", label: "Scrap Quantity" },
-                    { key: "extra_info", label: "Extra Info" },
-                    { key: "bom_type", label: "BOM Type" },
+                    ...tableColumns.map((col) => ({
+                      ...col,
+                      render: (value, row) =>
+                        editingRowKey === `${row.row_source}:${row.id}` && col.key !== "bom_type" ? (
+                          <input
+                            value={editingForm?.[col.key] ?? ""}
+                            onChange={(e) => setEditingForm((prev) => ({ ...(prev || {}), [col.key]: e.target.value }))}
+                            className="h-9 min-w-[120px] rounded-md border border-[#810055]/30 px-2 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
+                          />
+                        ) : (
+                          value
+                        ),
+                    })),
+                    {
+                      key: "actions",
+                      label: "Actions",
+                      sortable: false,
+                      render: (_value, row) =>
+                        editingRowKey === `${row.row_source}:${row.id}` ? (
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => saveRowEdit(row)}
+                              disabled={updateBomRowMutation.isPending}
+                              className="rounded-md bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelRowEdit}
+                              className="rounded-md border border-[#810055]/30 px-3 py-1 text-xs font-medium text-black transition-colors hover:bg-[#f9ecf5]"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startRowEdit(row)}
+                              className="rounded-md bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteModalRow(row)}
+                              disabled={deleteBomRowMutation.isPending}
+                              className="rounded-md bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ),
+                    },
                   ]}
                   rows={rows}
                   emptyText="No records"
@@ -242,6 +371,34 @@ function BomManagerPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {deleteModalRow && (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-gray-900/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-[#810055]/20 bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-black">Delete BOM row?</h3>
+            <p className="mt-2 text-sm text-black/80">
+              This row will be marked as deleted and hidden from BOM Manager.
+            </p>
+            <p className="mt-1 text-xs text-black/60">Item: {deleteModalRow.item_code || `#${deleteModalRow.id}`}</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteModalRow(null)}
+                className="rounded-lg border border-[#810055]/30 px-4 py-2 text-sm font-medium text-black transition-colors duration-150 hover:bg-[#f9ecf5]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteRow}
+                disabled={deleteBomRowMutation.isPending}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deleteBomRowMutation.isPending ? "Deleting..." : "Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

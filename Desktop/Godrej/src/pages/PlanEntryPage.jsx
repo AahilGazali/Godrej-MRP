@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import DataTable from "../components/DataTable";
-import { useSavePlan, useLockerMaster } from "../hooks/useMrpData";
+import { useSavePlan, useLockerMaster, useUpdatePlanQuantity } from "../hooks/useMrpData";
 import { useQueryClient } from "@tanstack/react-query";
 
 const PLAN_ENTRY_DRAFT_KEY = "plan_entry_draft";
@@ -53,7 +53,10 @@ function PlanEntryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const savePlanMutation = useSavePlan();
+  const updatePlanQuantityMutation = useUpdatePlanQuantity();
   const { data: lockers = [], isLoading: lockersLoading } = useLockerMaster();
+  const [editingRowId, setEditingRowId] = useState(null);
+  const [editingQuantity, setEditingQuantity] = useState("");
 
   const lockerCodes = useMemo(() => lockers.map((l) => l.locker_code).filter(Boolean), [lockers]);
   const lockerCodeMap = useMemo(() => {
@@ -112,6 +115,43 @@ function PlanEntryPage() {
   };
 
   const removeRow = (id) => setRows((prev) => prev.filter((r) => r.id !== id));
+
+  const startEditQuantity = (row) => {
+    setEditingRowId(row.id);
+    setEditingQuantity(String(row.quantity ?? ""));
+  };
+
+  const cancelEditQuantity = () => {
+    setEditingRowId(null);
+    setEditingQuantity("");
+  };
+
+  const saveEditQuantity = async (row) => {
+    const nextQty = Number(editingQuantity);
+    if (!editingQuantity || Number.isNaN(nextQty) || nextQty <= 0) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, quantity: nextQty } : r)));
+
+    try {
+      await updatePlanQuantityMutation.mutateAsync({
+        date,
+        locker_item_code: row.locker_item_code,
+        quantity: nextQty,
+      });
+    } catch (error) {
+      const status = error?.response?.status;
+      if (status !== 404) {
+        toast.error(error?.response?.data?.message || error?.message || "Failed to update quantity");
+        return;
+      }
+    }
+
+    cancelEditQuantity();
+    toast.success("Quantity updated");
+  };
 
   const handleCalculate = async () => {
     if (!date || rows.length === 0) {
@@ -224,18 +264,65 @@ function PlanEntryPage() {
             showSearch={false}
             columns={[
               { key: "locker_item_code", label: "Locker Item Code" },
-              { key: "quantity", label: "Quantity" },
+              {
+                key: "quantity",
+                label: "Quantity",
+                render: (value, row) =>
+                  editingRowId === row.id ? (
+                    <input
+                      type="number"
+                      min={1}
+                      value={editingQuantity}
+                      onChange={(e) => setEditingQuantity(e.target.value)}
+                      className="h-9 w-24 rounded-lg border border-[#810055]/30 px-2 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
+                    />
+                  ) : (
+                    value
+                  ),
+              },
               {
                 key: "action",
-                label: "",
+                label: "Actions",
+                sortable: false,
                 render: (_v, row) => (
-                  <button
-                    type="button"
-                    onClick={() => removeRow(row.id)}
-                    className="rounded-lg bg-red-50 px-2 py-1 text-sm font-medium text-red-600 transition-colors duration-150 hover:bg-red-100"
-                  >
-                    Delete
-                  </button>
+                  <div className="flex gap-2">
+                    {editingRowId === row.id ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => saveEditQuantity(row)}
+                          disabled={updatePlanQuantityMutation.isPending}
+                          className="rounded-lg bg-blue-50 px-2 py-1 text-sm font-medium text-blue-700 transition-colors duration-150 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEditQuantity}
+                          className="rounded-lg border border-[#810055]/30 px-2 py-1 text-sm font-medium text-black transition-colors duration-150 hover:bg-[#f9ecf5]"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEditQuantity(row)}
+                          className="rounded-lg bg-blue-50 px-2 py-1 text-sm font-medium text-blue-700 transition-colors duration-150 hover:bg-blue-100"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeRow(row.id)}
+                          className="rounded-lg bg-red-50 px-2 py-1 text-sm font-medium text-red-600 transition-colors duration-150 hover:bg-red-100"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
                 ),
               },
             ]}

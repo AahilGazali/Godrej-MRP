@@ -114,7 +114,7 @@ function LockerMasterPage() {
             <SkeletonTable />
           ) : (
             <DataTable
-              searchKeys={["product", "subtype", "locker_code"]}
+              searchKeys={["product"]}
               columns={[
                 { key: "product", label: "Product" },
                 { key: "subtype", label: "SubType" },

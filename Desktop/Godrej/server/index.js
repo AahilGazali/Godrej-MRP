@@ -31,9 +31,9 @@ async function findMissingBomLockerCodes(planRows = []) {
       FROM unnest($1::text[]) AS code
     ),
     combined_bom AS (
-      SELECT TRIM(locker_model) AS locker_model FROM bom_items
+      SELECT TRIM(locker_model) AS locker_model FROM bom_items WHERE COALESCE(status, 'active') = 'active'
       UNION
-      SELECT TRIM(locker_model) AS locker_model FROM bom_uploaded_rows
+      SELECT TRIM(locker_model) AS locker_model FROM bom_uploaded_rows WHERE COALESCE(status, 'active') = 'active'
     )
     SELECT r.locker_item_code
     FROM requested_codes r
@@ -195,18 +195,22 @@ app.delete("/api/lockers/:lockerCode", async (req, res) => {
 app.get("/api/bom", async (_req, res) => {
   const uploaded = await pool.query(
     `SELECT
+      'uploaded'::text AS row_source,
       id, locker_model, bom_type, level, position, item_code, description, drawing_no, drawing_rev_no,
       op, warehouse, use_pnt_wh, entrp_unit, lot_sel, revision, effective_date, expiry_date,
       length_mm, width_mm, number_of_units, inv_unit, net_quantity, scrap_percent, scrap_quantity, extra_info
      FROM bom_uploaded_rows
+     WHERE COALESCE(status, 'active') = 'active'
      ORDER BY locker_model, id`
   );
   const classic = await pool.query(
     `SELECT
+      'classic'::text AS row_source,
       id, locker_model, bom_type, '' AS level, '' AS position, item_code, '' AS description, '' AS drawing_no, '' AS drawing_rev_no,
       '' AS op, '' AS warehouse, '' AS use_pnt_wh, '' AS entrp_unit, '' AS lot_sel, '' AS revision, '' AS effective_date, '' AS expiry_date,
       '' AS length_mm, '' AS width_mm, '' AS number_of_units, '' AS inv_unit, qty::text AS net_quantity, '' AS scrap_percent, '' AS scrap_quantity, '' AS extra_info
      FROM bom_items
+     WHERE COALESCE(status, 'active') = 'active'
      ORDER BY locker_model, id`
   );
   res.json([...uploaded.rows, ...classic.rows]);
@@ -288,6 +292,139 @@ app.post("/api/bom/custom", async (req, res) => {
     inserted.push(out[0]);
   }
   res.status(201).json(inserted);
+});
+
+app.put("/api/bom/row/:source/:id", async (req, res) => {
+  const source = String(req.params.source || "").trim().toLowerCase();
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ message: "Valid BOM row id is required" });
+  }
+  if (source !== "uploaded" && source !== "classic") {
+    return res.status(400).json({ message: "source must be uploaded or classic" });
+  }
+
+  if (source === "uploaded") {
+    const level = String(req.body.level ?? "").trim();
+    const position = String(req.body.position ?? "").trim();
+    const item_code = String(req.body.item_code ?? "").trim().replace(/\s+/g, "");
+    const description = String(req.body.description ?? "").trim();
+    const drawing_no = String(req.body.drawing_no ?? "").trim();
+    const drawing_rev_no = String(req.body.drawing_rev_no ?? "").trim();
+    const op = String(req.body.op ?? "").trim();
+    const warehouse = String(req.body.warehouse ?? "").trim();
+    const use_pnt_wh = String(req.body.use_pnt_wh ?? "").trim();
+    const entrp_unit = String(req.body.entrp_unit ?? "").trim();
+    const lot_sel = String(req.body.lot_sel ?? "").trim();
+    const revision = String(req.body.revision ?? "").trim();
+    const effective_date = String(req.body.effective_date ?? "").trim();
+    const expiry_date = String(req.body.expiry_date ?? "").trim();
+    const length_mm = String(req.body.length_mm ?? "").trim();
+    const width_mm = String(req.body.width_mm ?? "").trim();
+    const number_of_units = String(req.body.number_of_units ?? "").trim();
+    const inv_unit = String(req.body.inv_unit ?? "").trim();
+    const net_quantity = String(req.body.net_quantity ?? "").trim();
+    const scrap_percent = String(req.body.scrap_percent ?? "").trim();
+    const scrap_quantity = String(req.body.scrap_quantity ?? "").trim();
+    const extra_info = String(req.body.extra_info ?? "").trim();
+
+    const { rows } = await pool.query(
+      `UPDATE bom_uploaded_rows
+       SET level = $1,
+           position = $2,
+           item_code = $3,
+           description = $4,
+           drawing_no = $5,
+           drawing_rev_no = $6,
+           op = $7,
+           warehouse = $8,
+           use_pnt_wh = $9,
+           entrp_unit = $10,
+           lot_sel = $11,
+           revision = $12,
+           effective_date = $13,
+           expiry_date = $14,
+           length_mm = $15,
+           width_mm = $16,
+           number_of_units = $17,
+           inv_unit = $18,
+           net_quantity = $19,
+           scrap_percent = $20,
+           scrap_quantity = $21,
+           extra_info = $22
+       WHERE id = $23 AND COALESCE(status, 'active') = 'active'
+       RETURNING
+         'uploaded'::text AS row_source,
+         id, locker_model, bom_type, level, position, item_code, description, drawing_no, drawing_rev_no,
+         op, warehouse, use_pnt_wh, entrp_unit, lot_sel, revision, effective_date, expiry_date,
+         length_mm, width_mm, number_of_units, inv_unit, net_quantity, scrap_percent, scrap_quantity, extra_info`,
+      [
+        level, position, item_code, description, drawing_no, drawing_rev_no, op, warehouse, use_pnt_wh, entrp_unit, lot_sel,
+        revision, effective_date, expiry_date, length_mm, width_mm, number_of_units, inv_unit, net_quantity, scrap_percent,
+        scrap_quantity, extra_info, id,
+      ]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "BOM row not found" });
+    }
+    return res.json(rows[0]);
+  }
+
+  const item_code = String(req.body.item_code ?? "").trim().replace(/\s+/g, "");
+  const net_quantity = Number(req.body.net_quantity);
+  const component_type = String(req.body.component_type ?? "").trim();
+  if (!item_code) {
+    return res.status(400).json({ message: "item_code is required" });
+  }
+  if (Number.isNaN(net_quantity)) {
+    return res.status(400).json({ message: "net_quantity must be numeric" });
+  }
+  const { rows } = await pool.query(
+    `UPDATE bom_items
+     SET item_code = $1,
+         qty = $2,
+         component_type = CASE WHEN $3 = '' THEN component_type ELSE $3 END
+     WHERE id = $4 AND COALESCE(status, 'active') = 'active'
+     RETURNING
+       'classic'::text AS row_source,
+       id, locker_model, bom_type, '' AS level, '' AS position, item_code, '' AS description, '' AS drawing_no, '' AS drawing_rev_no,
+       '' AS op, '' AS warehouse, '' AS use_pnt_wh, '' AS entrp_unit, '' AS lot_sel, '' AS revision, '' AS effective_date, '' AS expiry_date,
+       '' AS length_mm, '' AS width_mm, '' AS number_of_units, '' AS inv_unit, qty::text AS net_quantity, '' AS scrap_percent, '' AS scrap_quantity, '' AS extra_info`,
+    [item_code, net_quantity, component_type, id]
+  );
+  if (rows.length === 0) {
+    return res.status(404).json({ message: "BOM row not found" });
+  }
+  return res.json(rows[0]);
+});
+
+app.delete("/api/bom/row/:source/:id", async (req, res) => {
+  const source = String(req.params.source || "").trim().toLowerCase();
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ message: "Valid BOM row id is required" });
+  }
+  if (source !== "uploaded" && source !== "classic") {
+    return res.status(400).json({ message: "source must be uploaded or classic" });
+  }
+
+  if (source === "uploaded") {
+    const { rowCount } = await pool.query(
+      `UPDATE bom_uploaded_rows
+       SET status = 'deleted', deleted_at = NOW()
+       WHERE id = $1 AND COALESCE(status, 'active') = 'active'`,
+      [id]
+    );
+    return res.json({ success: true, deleted: rowCount });
+  }
+
+  const { rowCount } = await pool.query(
+    `UPDATE bom_items
+     SET status = 'deleted', deleted_at = NOW()
+     WHERE id = $1 AND COALESCE(status, 'active') = 'active'`,
+    [id]
+  );
+  return res.json({ success: true, deleted: rowCount });
 });
 
 app.delete("/api/bom/model/:lockerModel", async (req, res) => {
@@ -415,6 +552,44 @@ app.post("/api/plan", async (req, res) => {
   res.status(201).json({ success: true, count: rows.length });
 });
 
+app.put("/api/plan/quantity", async (req, res) => {
+  const date = String(req.body?.date ?? "").trim();
+  const lockerItemCode = String(req.body?.locker_item_code ?? "").trim();
+  const quantity = Number(req.body?.quantity);
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ message: "Valid date is required" });
+  }
+  if (!lockerItemCode) {
+    return res.status(400).json({ message: "locker_item_code is required" });
+  }
+  if (Number.isNaN(quantity) || quantity <= 0) {
+    return res.status(400).json({ message: "quantity must be a positive number" });
+  }
+
+  const existing = await pool.query(
+    `SELECT id, subtype
+     FROM plan_entries
+     WHERE plan_date = $1 AND locker_item_code = $2
+     ORDER BY id DESC
+     LIMIT 1`,
+    [date, lockerItemCode]
+  );
+  if (existing.rowCount === 0) {
+    return res.status(404).json({ message: "Plan entry not found for given date and locker item code" });
+  }
+
+  const subtype = existing.rows[0].subtype || "Standard";
+  const { rows } = await pool.query(
+    `UPDATE plan_entries
+     SET quantity = $1
+     WHERE id = $2
+     RETURNING id, TO_CHAR(plan_date, 'YYYY-MM-DD') AS date, locker_item_code, subtype, quantity`,
+    [quantity, existing.rows[0].id]
+  );
+  return res.json(rows[0]);
+});
+
 app.get("/api/mrp/results", async (req, res) => {
   const planDateParam = req.query.planDate ? String(req.query.planDate).trim() : null;
 
@@ -450,6 +625,7 @@ app.get("/api/mrp/results", async (req, res) => {
           ELSE 0::numeric
         END AS qty
       FROM bom_uploaded_rows
+      WHERE COALESCE(status, 'active') = 'active'
     ),
     combined_bom AS (
       SELECT
@@ -466,6 +642,7 @@ app.get("/api/mrp/results", async (req, res) => {
         NULL::text AS bom_drawing_no,
         qty::numeric AS qty
       FROM bom_items
+      WHERE COALESCE(status, 'active') = 'active'
       UNION ALL
       SELECT source_id, source_type, locker_model, level, position, item_code, component_type, material_label, bom_description, bom_inv_unit, bom_drawing_no, qty
       FROM uploaded_qty

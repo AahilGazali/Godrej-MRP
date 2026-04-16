@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import {
   addCustomBom,
   addLocker,
+  deleteBomRow,
   deleteBomByModel,
   deleteLocker,
   fetchBom,
@@ -10,6 +11,8 @@ import {
   fetchMrpResults,
   fetchUploads,
   savePlanEntries,
+  updatePlanQuantity,
+  updateBomRow,
   updateLocker,
   uploadBomRows,
   uploadLockerRows,
@@ -615,7 +618,22 @@ export const useDeleteBomByModel = () =>
     mutationFn: deleteBomByModel,
   });
 
+export const useUpdateBomRow = () =>
+  useMutation({
+    mutationFn: updateBomRow,
+  });
+
+export const useDeleteBomRow = () =>
+  useMutation({
+    mutationFn: deleteBomRow,
+  });
+
 export const useSavePlan = () =>
   useMutation({
     mutationFn: savePlanEntries,
+  });
+
+export const useUpdatePlanQuantity = () =>
+  useMutation({
+    mutationFn: updatePlanQuantity,
   });

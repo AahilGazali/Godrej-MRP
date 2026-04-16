@@ -40,6 +40,16 @@ export const uploadBomRows = async ({ locker_model, fileName, rows }) => {
   return data;
 };
 
+export const updateBomRow = async ({ source, id, payload }) => {
+  const { data } = await client.put(`/bom/row/${encodeURIComponent(source)}/${id}`, payload);
+  return data;
+};
+
+export const deleteBomRow = async ({ source, id }) => {
+  const { data } = await client.delete(`/bom/row/${encodeURIComponent(source)}/${id}`);
+  return data;
+};
+
 export const deleteBomByModel = async (lockerModel) => {
   const { data } = await client.delete(`/bom/model/${encodeURIComponent(lockerModel)}`);
   return data;
@@ -57,6 +67,11 @@ export const uploadStockRows = async ({ date, fileName, stockRows }) => {
 
 export const savePlanEntries = async ({ date, rows }) => {
   const { data } = await client.post("/plan", { date, rows });
+  return data;
+};
+
+export const updatePlanQuantity = async ({ date, locker_item_code, quantity }) => {
+  const { data } = await client.put("/plan/quantity", { date, locker_item_code, quantity });
   return data;
 };
 

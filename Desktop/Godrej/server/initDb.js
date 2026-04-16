@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS bom_items (
   component_type TEXT NOT NULL,
   qty NUMERIC NOT NULL,
   bom_type TEXT NOT NULL CHECK (bom_type IN ('Standard','Custom')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','deleted')),
+  deleted_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -47,6 +49,8 @@ CREATE TABLE IF NOT EXISTS bom_uploaded_rows (
   scrap_percent TEXT,
   scrap_quantity TEXT,
   extra_info TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','deleted')),
+  deleted_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -121,6 +125,12 @@ export async function initDb() {
   await pool.query(`ALTER TABLE lockers ADD COLUMN IF NOT EXISTS product TEXT`);
   await pool.query(`ALTER TABLE lockers ADD COLUMN IF NOT EXISTS subtype TEXT`);
   await pool.query(`UPDATE lockers SET product = COALESCE(product, description), subtype = COALESCE(subtype, model)`);
+  await pool.query(`ALTER TABLE bom_items ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`);
+  await pool.query(`ALTER TABLE bom_items ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`);
+  await pool.query(`UPDATE bom_items SET status = 'active' WHERE status IS NULL OR TRIM(status) = ''`);
+  await pool.query(`ALTER TABLE bom_uploaded_rows ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`);
+  await pool.query(`ALTER TABLE bom_uploaded_rows ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`);
+  await pool.query(`UPDATE bom_uploaded_rows SET status = 'active' WHERE status IS NULL OR TRIM(status) = ''`);
   await pool.query(`ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS sr_no TEXT`);
   await pool.query(`ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS stock_material TEXT`);
   await pool.query(`ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS ln_description TEXT`);
