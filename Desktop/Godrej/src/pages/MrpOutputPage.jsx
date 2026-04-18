@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import DataTable from "../components/DataTable";
 import SkeletonTable from "../components/SkeletonTable";
-import { useLockerMaster, useMrpResults } from "../hooks/useMrpData";
+import { useBom, useLockerMaster, useMrpResults } from "../hooks/useMrpData";
 
 function StatCard({ title, value, tone = "default" }) {
   const wrap =
@@ -36,10 +36,50 @@ function getSubtypeMultiplier(subtype) {
   return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
+function normalizeTraceKey(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function normalizeWhitespaceKey(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function bomMatchesLocker(bomLockerModel, locker) {
+  const exactKey = String(bomLockerModel ?? "").trim().toLowerCase();
+  const compactKey = normalizeWhitespaceKey(bomLockerModel);
+  const traceKey = normalizeTraceKey(bomLockerModel);
+  if (!traceKey || !locker) return false;
+
+  const candidates = [
+    locker.locker_code,
+    locker.product,
+    locker.subtype,
+    `${locker.product ?? ""}${locker.subtype ?? ""}`,
+    `${locker.product ?? ""} ${locker.subtype ?? ""}`,
+    `${locker.subtype ?? ""}${locker.product ?? ""}`,
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+
+  return candidates.some((candidate) => {
+    const candidateTraceKey = normalizeTraceKey(candidate);
+    if (!candidateTraceKey) return false;
+
+    return (
+      candidate.toLowerCase() === exactKey ||
+      normalizeWhitespaceKey(candidate) === compactKey ||
+      candidateTraceKey === traceKey ||
+      (traceKey.length >= 3 && candidateTraceKey.includes(traceKey)) ||
+      (candidateTraceKey.length >= 3 && traceKey.includes(candidateTraceKey))
+    );
+  });
+}
+
 function MrpOutputPage() {
   const location = useLocation();
   const { data = [], isLoading } = useMrpResults();
   const { data: lockers = [] } = useLockerMaster();
+  const { data: bomData = [] } = useBom();
   const [showWarnings, setShowWarnings] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [planSnapshot, setPlanSnapshot] = useState(null);
@@ -47,11 +87,21 @@ function MrpOutputPage() {
   useEffect(() => {
     if (location.state?.date && location.state?.rows) {
       setPlanSnapshot(location.state);
+      try {
+        sessionStorage.setItem("mrp_plan_snapshot", JSON.stringify(location.state));
+        localStorage.setItem("mrp_plan_snapshot", JSON.stringify(location.state));
+      } catch {
+        /* ignore storage issues */
+      }
       return;
     }
     try {
-      const raw = sessionStorage.getItem("mrp_plan_snapshot");
-      if (raw) setPlanSnapshot(JSON.parse(raw));
+      const raw = sessionStorage.getItem("mrp_plan_snapshot") || localStorage.getItem("mrp_plan_snapshot");
+      if (raw) {
+        setPlanSnapshot(JSON.parse(raw));
+        return;
+      }
+      setPlanSnapshot(null);
     } catch {
       setPlanSnapshot(null);
     }
@@ -83,6 +133,108 @@ function MrpOutputPage() {
   }, [data, lockers, planSnapshot]);
 
   const warningItems = useMemo(() => data.filter((d) => d.status === "LOW").slice(0, 10), [data]);
+
+  const sourcesMap = useMemo(() => {
+    const result = new Map();
+
+    // Build locker lookup: locker_code → locker object
+    const lockerByCode = new Map(
+      lockers.map((l) => [String(l.locker_code ?? "").trim(), l])
+    );
+
+    // Build all possible locker_model keys for a locker
+    function getLockerModelKeys(locker) {
+      if (!locker) return new Set();
+      const product = String(locker.product ?? "").trim();
+      const subtype = String(locker.subtype ?? "").trim();
+      const keys = new Set();
+
+      // Normalize: lowercase, remove hyphens, collapse spaces
+      const norm = (s) => s.toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ").trim();
+      const compact = (s) => s.toLowerCase().replace(/[-\s]/g, "");
+
+      const p = norm(product);
+      const s = norm(subtype);
+
+      // Add all combinations
+      [
+        `${p} ${s}`,
+        `${p}${s}`,
+        `${s} ${p}`,
+        `${s}${p}`,
+        compact(`${p}${s}`),
+        compact(`${product}${subtype}`),
+        p,
+        s,
+      ]
+        .map((k) => k.trim())
+        .filter(Boolean)
+        .forEach((k) => keys.add(k));
+
+      return keys;
+    }
+
+    for (const mrpRow of data) {
+      if (mrpRow.status !== "LOW") continue;
+
+      const materialCode = String(mrpRow.item_code ?? "").trim();
+      if (!materialCode) continue;
+
+      const sourceMap = new Map();
+
+      for (const planRow of planSnapshot?.rows ?? []) {
+        const planQty = Number(planRow.quantity) || 0;
+        if (planQty <= 0) continue;
+
+        const planLockerCode = String(planRow.locker_item_code ?? "").trim();
+
+        // Step 1: Find locker in locker master
+        const locker = lockerByCode.get(planLockerCode);
+        if (!locker) continue;
+
+        // Step 2: Get all valid locker_model keys for this locker
+        const validModelKeys = getLockerModelKeys(locker);
+
+        // Step 3: Find BOM rows where:
+        //   - bom.item_code === materialCode (exact)
+        //   - bom.locker_model matches one of the locker's keys
+        const matchingBomRows = bomData.filter((bom) => {
+          const bomItemCode = String(bom.item_code ?? "").trim();
+          const bomLockerModel = String(bom.locker_model ?? "")
+            .trim()
+            .toLowerCase()
+            .replace(/-/g, " ")
+            .replace(/\s+/g, " ");
+          return (
+            bomItemCode === materialCode &&
+            validModelKeys.has(bomLockerModel)
+          );
+        });
+
+        for (const bom of matchingBomRows) {
+          const bomQty = Number(bom.net_quantity ?? bom.qty ?? 0) || 0;
+          if (bomQty <= 0) continue;
+
+          const contribution = bomQty * planQty;
+          sourceMap.set(
+            planLockerCode,
+            (sourceMap.get(planLockerCode) || 0) + contribution
+          );
+        }
+      }
+
+      if (sourceMap.size > 0) {
+        result.set(
+          materialCode,
+          Array.from(sourceMap.entries())
+            .map(([locker_item_code, quantity]) => ({ locker_item_code, quantity }))
+            .sort((a, b) => b.quantity - a.quantity)
+        );
+      }
+    }
+
+    return result;
+  }, [bomData, data, lockers, planSnapshot]);
 
   const handleDownload = () => {
     setDownloading(true);
@@ -256,12 +408,27 @@ function MrpOutputPage() {
               <p>No shortage warnings in the current result set.</p>
             ) : (
               <ul className="list-disc space-y-1 pl-5">
-                {warningItems.map((r) => (
-                  <li key={r.item_code}>
-                    <span className="font-medium text-black">{r.item_code}</span> — required{" "}
-                    {r.required_quantity}, stock {r.stock_available}, short by {Math.abs(r.difference)}.
-                  </li>
-                ))}
+                {warningItems.map((r) => {
+                  const sources = sourcesMap.get(String(r.item_code ?? "").trim()) ?? [];
+                  return (
+                    <li key={r.item_code}>
+                      <span className="font-medium text-black">{r.item_code}</span> — required{" "}
+                      {r.required_quantity}, stock {r.stock_available}, short by {Math.abs(r.difference)}.
+                      {sources.length > 0 && (
+                        <div className="mt-1 pl-2 text-xs text-black/70">
+                          <span className="font-medium">Caused by:</span>
+                          <ul className="list-none mt-0.5 space-y-0.5">
+                            {sources.map((s) => (
+                              <li key={s.locker_item_code}>
+                                → Locker <span className="font-medium">{s.locker_item_code}</span> — {s.quantity} units
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

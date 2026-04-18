@@ -23,6 +23,7 @@ function BomManagerPage() {
   const [editingRowKey, setEditingRowKey] = useState("");
   const [editingForm, setEditingForm] = useState(null);
   const [deleteModalRow, setDeleteModalRow] = useState(null);
+  const [deleteBomModalModel, setDeleteBomModalModel] = useState(null);
 
   const mergedRows = data;
   const models = useMemo(() => {
@@ -130,6 +131,34 @@ function BomManagerPage() {
     }
   };
 
+  const deleteEntireBom = async () => {
+    if (!deleteBomModalModel) return;
+    const rows = grouped[deleteBomModalModel] || [];
+    if (!rows.length) {
+      setDeleteBomModalModel(null);
+      return;
+    }
+
+    try {
+      await Promise.all(
+        rows.map((row) =>
+          deleteBomRowMutation.mutateAsync({
+            source: row.row_source,
+            id: row.id,
+          })
+        )
+      );
+      await queryClient.invalidateQueries({ queryKey: ["bomData"] });
+      if (rows.some((row) => editingRowKey === `${row.row_source}:${row.id}`)) {
+        cancelRowEdit();
+      }
+      setDeleteBomModalModel(null);
+      toast.success("BOM deleted");
+    } catch (error) {
+      toast.error(error?.response?.data?.message || error?.message || "Failed to delete BOM");
+    }
+  };
+
   const saveCustomBom = () => {
     if (!selectedCustomModel) {
       toast.error("Select locker model");
@@ -227,7 +256,17 @@ function BomManagerPage() {
           ) : (
             Object.entries(grouped).map(([model, rows]) => (
               <div key={model}>
-                <h3 className="mb-3 text-lg font-medium text-black">Locker Model: {model}</h3>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-lg font-medium text-black">Locker Model: {model}</h3>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteBomModalModel(model)}
+                    disabled={deleteBomRowMutation.isPending}
+                    className="rounded-md bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Delete BOM
+                  </button>
+                </div>
                 <DataTable
                   columns={[
                     ...tableColumns.map((col) => ({
@@ -397,6 +436,33 @@ function BomManagerPage() {
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {deleteBomRowMutation.isPending ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteBomModalModel && (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-gray-900/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-[#810055]/20 bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-black">Delete entire BOM?</h3>
+            <p className="mt-2 text-sm text-black/80">
+              This will permanently delete all rows for Locker Model: {deleteBomModalModel}. This cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteBomModalModel(null)}
+                className="rounded-lg border border-[#810055]/30 px-4 py-2 text-sm font-medium text-black transition-colors duration-150 hover:bg-[#f9ecf5]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={deleteEntireBom}
+                disabled={deleteBomRowMutation.isPending}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deleteBomRowMutation.isPending ? "Deleting..." : "Delete Entire BOM"}
               </button>
             </div>
           </div>

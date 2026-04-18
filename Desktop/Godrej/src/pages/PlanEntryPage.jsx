@@ -181,6 +181,7 @@ function PlanEntryPage() {
         rows: rows.map(({ locker_item_code, quantity }) => ({ locker_item_code, quantity })),
       };
       sessionStorage.setItem("mrp_plan_snapshot", JSON.stringify(snapshot));
+      localStorage.setItem("mrp_plan_snapshot", JSON.stringify(snapshot));
       sessionStorage.removeItem(PLAN_ENTRY_DRAFT_KEY);
       await queryClient.invalidateQueries({ queryKey: ["mrpResults"] });
       toast.success("Plan saved. Opening MRP results…");
