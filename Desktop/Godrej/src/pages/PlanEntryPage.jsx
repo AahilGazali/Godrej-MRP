@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import DataTable from "../components/DataTable";
@@ -57,6 +57,9 @@ function PlanEntryPage() {
   const { data: lockers = [], isLoading: lockersLoading } = useLockerMaster();
   const [editingRowId, setEditingRowId] = useState(null);
   const [editingQuantity, setEditingQuantity] = useState("");
+  const [showLockerDropdown, setShowLockerDropdown] = useState(false);
+  const [lockerSearch, setLockerSearch] = useState("");
+  const lockerDropdownRef = useRef(null);
 
   const lockerCodes = useMemo(() => lockers.map((l) => l.locker_code).filter(Boolean), [lockers]);
   const lockerCodeMap = useMemo(() => {
@@ -68,6 +71,18 @@ function PlanEntryPage() {
     return map;
   }, [lockerCodes]);
 
+  const filteredLockers = useMemo(() => {
+    const query = normalizeLockerCode(lockerSearch);
+    if (!query) return lockers;
+
+    return lockers.filter((locker) => {
+      const code = normalizeLockerCode(locker.locker_code);
+      const product = normalizeLockerCode(locker.product);
+      const subtype = normalizeLockerCode(locker.subtype);
+      return code.includes(query) || product.includes(query) || subtype.includes(query);
+    });
+  }, [lockers, lockerSearch]);
+
   useEffect(() => {
     try {
       sessionStorage.setItem(PLAN_ENTRY_DRAFT_KEY, JSON.stringify({ date, rows }));
@@ -75,6 +90,17 @@ function PlanEntryPage() {
       /* ignore quota / private mode */
     }
   }, [date, rows]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (lockerDropdownRef.current && !lockerDropdownRef.current.contains(event.target)) {
+        setShowLockerDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const addRow = () => {
     const enteredCode = String(form.locker_item_code ?? "").trim();
@@ -215,20 +241,65 @@ function PlanEntryPage() {
         </div>
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500">Locker item code</label>
-            <input
-              list="planLockerCodes"
-              placeholder="Locker Item Code"
-              value={form.locker_item_code}
-              onChange={(e) => setForm((p) => ({ ...p, locker_item_code: e.target.value }))}
-              className="h-10 w-full rounded-lg border border-gray-300 px-3 text-sm text-gray-700 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
-            />
-            <datalist id="planLockerCodes">
-              {lockerCodes.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
+          <div className="min-w-0 flex-1 relative" ref={lockerDropdownRef}>
+            <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-black">
+              Locker item code
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Select or type locker code"
+                value={lockerSearch}
+                onFocus={() => setShowLockerDropdown(true)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setLockerSearch(value);
+                  setForm((p) => ({ ...p, locker_item_code: value }));
+                  setShowLockerDropdown(true);
+                }}
+                className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 pr-10 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
+              />
+              <button
+                type="button"
+                onClick={() => setShowLockerDropdown((prev) => !prev)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-secondary"
+              >
+                ▾
+              </button>
+            </div>
+            {showLockerDropdown && (
+              <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-[#810055]/30 bg-white shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLockerSearch("");
+                    setForm((p) => ({ ...p, locker_item_code: "" }));
+                    setShowLockerDropdown(false);
+                  }}
+                  className="block w-full border-b border-[#810055]/10 px-3 py-2 text-left text-sm text-gray-500 hover:bg-[#f9ecf5]"
+                >
+                  Select Locker
+                </button>
+                {filteredLockers.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-gray-500">No matching lockers found</div>
+                ) : (
+                  filteredLockers.map((l) => (
+                    <button
+                      type="button"
+                      key={l.locker_code}
+                      onClick={() => {
+                        setLockerSearch(l.locker_code);
+                        setForm((p) => ({ ...p, locker_item_code: l.locker_code }));
+                        setShowLockerDropdown(false);
+                      }}
+                      className="block w-full px-3 py-2 text-left text-sm text-black hover:bg-[#f9ecf5]"
+                    >
+                      {l.locker_code} — {l.product} | {l.subtype}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
           {form.locker_item_code && (
             <div className="min-w-0 flex-1 sm:max-w-xs">

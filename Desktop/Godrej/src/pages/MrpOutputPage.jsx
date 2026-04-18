@@ -297,11 +297,6 @@ function MrpOutputPage() {
 
   return (
     <div className="space-y-6">
-      <div className="border-b border-[#810055]/20 pb-4">
-        <h2 className="text-2xl font-semibold text-black">MRP output</h2>
-        <p className="mt-1 text-sm text-black">Material requirement planning — shortages and coverage by component.</p>
-      </div>
-
       {planSnapshot?.rows?.length > 0 && (
         <section className="rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
           <h3 className="text-lg font-medium text-black">Plan used for this run</h3>
@@ -327,6 +322,47 @@ function MrpOutputPage() {
         <StatCard title="Total Lockers" value={stats.totalLockers} />
         <StatCard title="Total Boxes" value={stats.totalBoxes} />
       </div>
+
+      <section className="rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setShowWarnings((p) => !p)}
+          className="w-full text-left text-sm font-semibold text-black"
+        >
+          Warnings {showWarnings ? "−" : "+"}
+        </button>
+        {showWarnings && (
+          <div className="mt-3 text-sm text-black">
+            {warningItems.length === 0 ? (
+              <p>No shortage warnings in the current result set.</p>
+            ) : (
+              <ul className="list-disc space-y-1 pl-5">
+                {warningItems.map((r) => {
+                  const sources = sourcesMap.get(String(r.item_code ?? "").trim()) ?? [];
+                  return (
+                    <li key={r.item_code}>
+                      <span className="font-medium text-black">{r.item_code}</span> — required{" "}
+                      {r.required_quantity}, stock {r.stock_available}, short by {Math.abs(r.difference)}.
+                      {sources.length > 0 && (
+                        <div className="mt-1 pl-2 text-xs text-black/70">
+                          <span className="font-medium">Caused by:</span>
+                          <ul className="list-none mt-0.5 space-y-0.5">
+                            {sources.map((s) => (
+                              <li key={s.locker_item_code}>
+                                → Locker <span className="font-medium">{s.locker_item_code}</span> — {s.quantity} units
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </section>
 
       {isLoading ? (
         <SkeletonTable />
@@ -393,47 +429,6 @@ function MrpOutputPage() {
           }
         />
       )}
-
-      <section className="rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setShowWarnings((p) => !p)}
-          className="w-full text-left text-sm font-semibold text-black"
-        >
-          Warnings {showWarnings ? "−" : "+"}
-        </button>
-        {showWarnings && (
-          <div className="mt-3 text-sm text-black">
-            {warningItems.length === 0 ? (
-              <p>No shortage warnings in the current result set.</p>
-            ) : (
-              <ul className="list-disc space-y-1 pl-5">
-                {warningItems.map((r) => {
-                  const sources = sourcesMap.get(String(r.item_code ?? "").trim()) ?? [];
-                  return (
-                    <li key={r.item_code}>
-                      <span className="font-medium text-black">{r.item_code}</span> — required{" "}
-                      {r.required_quantity}, stock {r.stock_available}, short by {Math.abs(r.difference)}.
-                      {sources.length > 0 && (
-                        <div className="mt-1 pl-2 text-xs text-black/70">
-                          <span className="font-medium">Caused by:</span>
-                          <ul className="list-none mt-0.5 space-y-0.5">
-                            {sources.map((s) => (
-                              <li key={s.locker_item_code}>
-                                → Locker <span className="font-medium">{s.locker_item_code}</span> — {s.quantity} units
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
