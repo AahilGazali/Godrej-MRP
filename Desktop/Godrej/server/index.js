@@ -1,3 +1,4 @@
+import 'dotenv/config';   // ✅ correct way for ES modules
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";

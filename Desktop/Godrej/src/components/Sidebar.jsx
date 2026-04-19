@@ -30,7 +30,7 @@ function Sidebar({ user }) {
 
   return (
     <aside
-      className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border bg-card px-3 py-5 font-['GEGHeadline'] transition-all duration-300 md:flex ${
+      className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border bg-card px-3 py-5 font-['GEGBody'] transition-all duration-300 md:flex ${
         collapsed ? "w-20" : "w-64"
       }`}
     >

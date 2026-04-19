@@ -1,10 +1,10 @@
-/* Load GEGHeadline directly from Godrej Secure shop */
+/* Load GEGBody directly from Godrej Secure shop */
 @font-face {
-  font-family: "GEGHeadline";
+  font-family: "GEGBody";
   src:
-    url("https://shop.godrejsecure.com/fonts/GEGHeadline.woff2") format("woff2"),
-    url("https://shop.godrejsecure.com/fonts/GEGHeadline.woff") format("woff"),
-    url("https://shop.godrejsecure.com/fonts/GEGHeadline.ttf") format("truetype");
+    url("https://shop.godrejsecure.com/fonts/GEGBody.woff2") format("woff2"),
+    url("https://shop.godrejsecure.com/fonts/GEGBody.woff") format("woff"),
+    url("https://shop.godrejsecure.com/fonts/GEGBody.ttf") format("truetype");
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -20,7 +20,7 @@ html {
 
 body {
   margin: 0;
-  font-family: "GEGHeadline";
+  font-family: "GEGBody";
   font-size: 18px;
   line-height: 1.3;
   background: #ffffff;
@@ -41,14 +41,14 @@ textarea {
 p {
   font-size: 18px;
   line-height: 1.3;
-  font-family: "GEGHeadline";
+  font-family: "GEGBody";
   color: #000000;
 }
 
 .subline-text {
   font-size: 18px;
   line-height: 1.3;
-  font-family: "GEGHeadline";
+  font-family: "GEGBody";
   color: black;
   margin: 50px 0 30px;
   width: 90%;
@@ -56,7 +56,7 @@ p {
 
 h2 {
   font-size: 50px;
-  font-family: "GEGHeadline";
+  font-family: "GEGBody";
   font-weight: 500;
 }
 
