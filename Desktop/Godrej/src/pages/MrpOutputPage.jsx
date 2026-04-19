@@ -75,7 +75,7 @@ function bomMatchesLocker(bomLockerModel, locker) {
   });
 }
 
-function MrpOutputPage() {
+function MrpOutputPage({ user }) {
   const location = useLocation();
   const { data = [], isLoading } = useMrpResults();
   const { data: lockers = [] } = useLockerMaster();

@@ -8,7 +8,8 @@ import { useAddLocker, useDeleteLocker, useFileUpload, useLockerMaster, useUpdat
 
 const EMPTY_FORM = { product: "", subtype: "", locker_code: "" };
 
-function LockerMasterPage() {
+function LockerMasterPage({ user }) {
+  const isManager = user?.role === "manager";
   const { data = [], isLoading } = useLockerMaster();
   const queryClient = useQueryClient();
   const uploadMutation = useFileUpload();
@@ -94,21 +95,25 @@ function LockerMasterPage() {
   return (
     <div className="space-y-6">
       <div className="grid gap-6 xl:grid-cols-[1fr,2fr]">
-        <FileDropzone
-          uploading={uploadMutation.isPending}
-          onUpload={handleUpload}
-          persistedUploadInfo={lastUploadInfo}
-        />
-        <section className="rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
+        {isManager && (
+          <FileDropzone
+            uploading={uploadMutation.isPending}
+            onUpload={handleUpload}
+            persistedUploadInfo={lastUploadInfo}
+          />
+        )}
+        <section className={`rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm ${!isManager ? "xl:col-span-2" : ""}`}>
           <div className="mb-5 flex items-center justify-between border-b border-[#810055]/20 pb-4">
             <h2 className="text-lg font-medium text-black">Locker Master Data</h2>
-            <button
-              type="button"
-              onClick={openAddModal}
-              className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary"
-            >
-              + Add Locker
-            </button>
+            {isManager && (
+              <button
+                type="button"
+                onClick={openAddModal}
+                className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary"
+              >
+                + Add Locker
+              </button>
+            )}
           </div>
           {isLoading ? (
             <SkeletonTable />
@@ -132,13 +137,15 @@ function LockerMasterPage() {
                       >
                         Edit
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteLocker(row)}
-                        className="rounded-md bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100"
-                      >
-                        Delete
-                      </button>
+                      {isManager && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLocker(row)}
+                          className="rounded-md bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   ),
                 },

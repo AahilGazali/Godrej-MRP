@@ -6,7 +6,8 @@ import { useAddCustomBom, useBom, useDeleteBomRow, useFileUpload, useUpdateBomRo
 import toast from "react-hot-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
-function BomManagerPage() {
+function BomManagerPage({ user }) {
+  const isManager = user?.role === "manager";
   const { data = [], isLoading } = useBom();
   const queryClient = useQueryClient();
   const addCustomBomMutation = useAddCustomBom();
@@ -238,11 +239,13 @@ function BomManagerPage() {
           Add Custom BOM
         </button>
       </div>
-      <FileDropzone
-        uploading={uploadMutation.isPending}
-        onUpload={handleBomUpload}
-        persistedUploadInfo={lastUploadInfo}
-      />
+      {isManager && (
+        <FileDropzone
+          uploading={uploadMutation.isPending}
+          onUpload={handleBomUpload}
+          persistedUploadInfo={lastUploadInfo}
+        />
+      )}
       {isLoading ? (
         <SkeletonTable />
       ) : (
@@ -258,14 +261,16 @@ function BomManagerPage() {
               <div key={model}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-lg font-medium text-black">Locker Model: {model}</h3>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteBomModalModel(model)}
-                    disabled={deleteBomRowMutation.isPending}
-                    className="rounded-md bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Delete BOM
-                  </button>
+                  {isManager && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteBomModalModel(model)}
+                      disabled={deleteBomRowMutation.isPending}
+                      className="rounded-md bg-red-50 px-3 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Delete BOM
+                    </button>
+                  )}
                 </div>
                 <DataTable
                   columns={[

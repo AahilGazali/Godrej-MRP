@@ -1,11 +1,189 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import cookieParser from "cookie-parser";
+import rateLimit from "express-rate-limit";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { pool } from "./db.js";
 import { initDb } from "./initDb.js";
 
 const app = express();
-app.use(cors());
+app.use(helmet());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+app.use(cookieParser());
 app.use(express.json({ limit: "2mb" }));
+
+// Rate limiter for login route
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 requests per 15 minutes
+  message: { message: 'Too many login attempts, please try again after 15 minutes' }
+});
+
+// Authentication middleware
+const authenticate = async (req, res, next) => {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).json({ message: 'Not logged in' });
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch {
+    return res.status(401).json({ message: 'Invalid session' });
+  }
+};
+
+// Authorization middleware
+const authorize = (allowedRoles) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: 'Unauthorized' });
+  if (!allowedRoles.includes(req.user.role)) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  next();
+};
+
+// Auth routes
+app.post("/api/login", loginLimiter, async (req, res) => {
+  const { email, password } = req.body;
+  
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and password are required' });
+  }
+  
+  if (!email.endsWith('@godrej.com')) {
+    return res.status(400).json({ message: 'Email must end with @godrej.com' });
+  }
+  
+  const { rows } = await pool.query(
+    'SELECT id, name, email, password_hash, role, is_active FROM users WHERE email = $1',
+    [email]
+  );
+  
+  if (rows.length === 0) {
+    return res.status(401).json({ message: 'Invalid credentials' });
+  }
+  
+  const user = rows[0];
+  
+  if (!user.is_active) {
+    return res.status(403).json({ message: 'Account is deactivated' });
+  }
+  
+  const validPassword = await bcrypt.compare(password, user.password_hash);
+  if (!validPassword) {
+    return res.status(401).json({ message: 'Invalid credentials' });
+  }
+  
+  const token = jwt.sign(
+    { id: user.id, name: user.name, email: user.email, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: '1d' }
+  );
+  
+  res.cookie('token', token, {
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000, // 1 day
+    sameSite: 'lax'
+  });
+  
+  res.json({ name: user.name, email: user.email, role: user.role });
+});
+
+app.post("/api/logout", (_req, res) => {
+  res.clearCookie('token');
+  res.json({ success: true });
+});
+
+app.get("/api/me", authenticate, (req, res) => {
+  res.json(req.user);
+});
+
+app.get("/api/users", authenticate, authorize(['manager']), async (_req, res) => {
+  const { rows } = await pool.query(
+    'SELECT id, name, email, role, is_active FROM users ORDER BY id'
+  );
+  res.json(rows);
+});
+
+app.post("/api/users", authenticate, authorize(['manager']), async (req, res) => {
+  const { name, email, password, role } = req.body;
+  
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({ message: 'Name, email, password, and role are required' });
+  }
+  
+  if (!email.endsWith('@godrej.com')) {
+    return res.status(400).json({ message: 'Email must end with @godrej.com' });
+  }
+  
+  if (!['manager', 'employee'].includes(role)) {
+    return res.status(400).json({ message: 'Role must be manager or employee' });
+  }
+  
+  const passwordHash = await bcrypt.hash(password, 10);
+  
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO users (name, email, password_hash, role)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, name, email, role, is_active`,
+      [name, email, passwordHash, role]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') { // unique violation
+      return res.status(409).json({ message: 'Email already exists' });
+    }
+    throw err;
+  }
+});
+
+app.patch("/api/users/:id", authenticate, authorize(['manager']), async (req, res) => {
+  const userId = Number(req.params.id);
+  const { role, is_active } = req.body;
+  
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return res.status(400).json({ message: 'Valid user id is required' });
+  }
+  
+  const updates = [];
+  const values = [];
+  let paramIndex = 1;
+  
+  if (role !== undefined) {
+    if (!['manager', 'employee'].includes(role)) {
+      return res.status(400).json({ message: 'Role must be manager or employee' });
+    }
+    updates.push(`role = $${paramIndex++}`);
+    values.push(role);
+  }
+  
+  if (is_active !== undefined) {
+    updates.push(`is_active = $${paramIndex++}`);
+    values.push(is_active);
+  }
+  
+  if (updates.length === 0) {
+    return res.status(400).json({ message: 'No fields to update' });
+  }
+  
+  values.push(userId);
+  const { rows } = await pool.query(
+    `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex}
+     RETURNING id, name, email, role, is_active`,
+    values
+  );
+  
+  if (rows.length === 0) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+  
+  res.json(rows[0]);
+});
 
 app.get("/api/health", async (_req, res) => {
   const { rows } = await pool.query("SELECT NOW() as now");
@@ -77,7 +255,7 @@ async function findMissingBomLockerCodes(planRows = []) {
   return rows.map((row) => row.locker_item_code);
 }
 
-app.get("/api/lockers", async (_req, res) => {
+app.get("/api/lockers", authenticate, async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT
       id,
@@ -90,7 +268,7 @@ app.get("/api/lockers", async (_req, res) => {
   res.json(rows);
 });
 
-app.post("/api/lockers", async (req, res) => {
+app.post("/api/lockers", authenticate, async (req, res) => {
   const { product, subtype, locker_code } = req.body;
   const { rows } = await pool.query(
     `INSERT INTO lockers (locker_item_code, model, description, product, subtype)
@@ -107,7 +285,7 @@ app.post("/api/lockers", async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-app.put("/api/lockers/:id", async (req, res) => {
+app.put("/api/lockers/:id", authenticate, async (req, res) => {
   const id = Number(req.params.id);
   const { product, subtype, locker_code } = req.body;
 
@@ -154,7 +332,7 @@ app.put("/api/lockers/:id", async (req, res) => {
   res.json(rows[0]);
 });
 
-app.post("/api/lockers/upload", async (req, res) => {
+app.post("/api/lockers/upload", authenticate, authorize(['manager']), async (req, res) => {
   const { rows = [], fileName = "uploaded-file" } = req.body;
   let count = 0;
   let warnings = 0;
@@ -182,7 +360,7 @@ app.post("/api/lockers/upload", async (req, res) => {
   res.json({ success: true, rowsSaved: count, warnings, fileName });
 });
 
-app.delete("/api/lockers/:lockerCode", async (req, res) => {
+app.delete("/api/lockers/:lockerCode", authenticate, authorize(['manager']), async (req, res) => {
   const lockerCode = String(req.params.lockerCode || "").trim();
   if (!lockerCode) {
     return res.status(400).json({ message: "lockerCode is required" });
@@ -192,7 +370,7 @@ app.delete("/api/lockers/:lockerCode", async (req, res) => {
   res.json({ success: true, deleted: rowCount });
 });
 
-app.get("/api/bom", async (_req, res) => {
+app.get("/api/bom", authenticate, async (_req, res) => {
   const uploaded = await pool.query(
     `SELECT
       'uploaded'::text AS row_source,
@@ -216,7 +394,7 @@ app.get("/api/bom", async (_req, res) => {
   res.json([...uploaded.rows, ...classic.rows]);
 });
 
-app.post("/api/bom/upload", async (req, res) => {
+app.post("/api/bom/upload", authenticate, authorize(['manager']), async (req, res) => {
   const { locker_model, rows = [], fileName = "uploaded-bom.xlsx" } = req.body;
   if (!locker_model) {
     return res.status(400).json({ message: "locker_model is required" });
@@ -279,7 +457,7 @@ app.post("/api/bom/upload", async (req, res) => {
   res.status(201).json({ success: true, rowsSaved, warnings, fileName });
 });
 
-app.post("/api/bom/custom", async (req, res) => {
+app.post("/api/bom/custom", authenticate, async (req, res) => {
   const { locker_model, rows = [] } = req.body;
   const inserted = [];
   for (const r of rows) {
@@ -294,7 +472,7 @@ app.post("/api/bom/custom", async (req, res) => {
   res.status(201).json(inserted);
 });
 
-app.put("/api/bom/row/:source/:id", async (req, res) => {
+app.put("/api/bom/row/:source/:id", authenticate, async (req, res) => {
   const source = String(req.params.source || "").trim().toLowerCase();
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
@@ -398,7 +576,7 @@ app.put("/api/bom/row/:source/:id", async (req, res) => {
   return res.json(rows[0]);
 });
 
-app.delete("/api/bom/row/:source/:id", async (req, res) => {
+app.delete("/api/bom/row/:source/:id", authenticate, async (req, res) => {
   const source = String(req.params.source || "").trim().toLowerCase();
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
@@ -427,7 +605,7 @@ app.delete("/api/bom/row/:source/:id", async (req, res) => {
   return res.json({ success: true, deleted: rowCount });
 });
 
-app.delete("/api/bom/model/:lockerModel", async (req, res) => {
+app.delete("/api/bom/model/:lockerModel", authenticate, authorize(['manager']), async (req, res) => {
   const lockerModel = String(req.params.lockerModel || "").trim();
   if (!lockerModel) {
     return res.status(400).json({ message: "lockerModel is required" });
@@ -442,7 +620,7 @@ app.delete("/api/bom/model/:lockerModel", async (req, res) => {
   });
 });
 
-app.get("/api/uploads", async (_req, res) => {
+app.get("/api/uploads", authenticate, async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT id, TO_CHAR(upload_date, 'YYYY-MM-DD') AS date, file_name AS file, rows_saved, warnings
      FROM stock_uploads
@@ -452,7 +630,7 @@ app.get("/api/uploads", async (_req, res) => {
   res.json(rows);
 });
 
-app.post("/api/uploads", async (req, res) => {
+app.post("/api/uploads", authenticate, authorize(['manager']), async (req, res) => {
   const { date, fileName, stockRows = [] } = req.body;
   let warnings = 0;
   const str = (v) => (v == null || v === "" ? "" : String(v).trim());
@@ -530,7 +708,7 @@ app.post("/api/uploads", async (req, res) => {
   }
 });
 
-app.post("/api/plan", async (req, res) => {
+app.post("/api/plan", authenticate, async (req, res) => {
   const { date, rows = [] } = req.body;
 
   const missingBomCodes = await findMissingBomLockerCodes(rows);
@@ -552,7 +730,7 @@ app.post("/api/plan", async (req, res) => {
   res.status(201).json({ success: true, count: rows.length });
 });
 
-app.put("/api/plan/quantity", async (req, res) => {
+app.put("/api/plan/quantity", authenticate, async (req, res) => {
   const date = String(req.body?.date ?? "").trim();
   const lockerItemCode = String(req.body?.locker_item_code ?? "").trim();
   const quantity = Number(req.body?.quantity);
@@ -590,7 +768,7 @@ app.put("/api/plan/quantity", async (req, res) => {
   return res.json(rows[0]);
 });
 
-app.get("/api/mrp/results", async (req, res) => {
+app.get("/api/mrp/results", authenticate, async (req, res) => {
   const planDateParam = req.query.planDate ? String(req.query.planDate).trim() : null;
 
   const sql = `

@@ -43,7 +43,7 @@ function readPlanEntryDraft() {
   }
 }
 
-function PlanEntryPage() {
+function PlanEntryPage({ user }) {
   const [date, setDate] = useState(() => {
     const { date: d } = readPlanEntryDraft();
     return d ?? new Date().toISOString().slice(0, 10);

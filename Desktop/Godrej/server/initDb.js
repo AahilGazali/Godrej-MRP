@@ -1,6 +1,23 @@
 import { pool } from "./db.js";
+import bcrypt from "bcrypt";
 
 const schemaSql = `
+CREATE TABLE IF NOT EXISTS roles (
+  id SERIAL PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'employee' 
+    CHECK (role IN ('manager', 'employee')),
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS lockers (
   id SERIAL PRIMARY KEY,
   locker_item_code TEXT UNIQUE NOT NULL,
@@ -149,6 +166,20 @@ export async function initDb() {
     }
     await pool.query(
       `INSERT INTO app_meta (key, value) VALUES ('demo_seed_v1', '1') ON CONFLICT (key) DO NOTHING`
+    );
+  }
+
+  // Seed default admin user if not exists
+  const { rows: adminExists } = await pool.query(
+    `SELECT 1 FROM users WHERE email = 'admin@godrej.com' LIMIT 1`
+  );
+  if (adminExists.length === 0) {
+    const passwordHash = await bcrypt.hash('Admin@123', 10);
+    await pool.query(
+      `INSERT INTO users (name, email, password_hash, role, is_active)
+       VALUES ('Admin', 'admin@godrej.com', $1, 'manager', true)
+       ON CONFLICT (email) DO NOTHING`,
+      [passwordHash]
     );
   }
 }
