@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import godrejLogo from "../assets/godrej.png";
 
 function LoginPage() {
   const [email, setEmail] = useState("");
@@ -44,7 +45,7 @@ function LoginPage() {
       <div className="w-full max-w-md rounded-2xl border border-[#810055]/20 bg-white p-8 shadow-xl">
         <div className="mb-8 flex flex-col items-center">
           <img
-            src="/godrej-logo.jpg"
+            src={godrejLogo}
             alt="Godrej Logo"
             className="mb-4 h-16 object-contain"
           />

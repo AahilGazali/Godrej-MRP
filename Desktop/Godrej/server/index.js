@@ -87,7 +87,6 @@ app.post("/api/login", loginLimiter, async (req, res) => {
   
   res.cookie('token', token, {
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 1 day
     sameSite: 'lax'
   });
   
@@ -103,14 +102,14 @@ app.get("/api/me", authenticate, (req, res) => {
   res.json(req.user);
 });
 
-app.get("/api/users", authenticate, authorize(['manager']), async (_req, res) => {
+app.get("/api/users", authenticate, authorize(['admin']), async (_req, res) => {
   const { rows } = await pool.query(
     'SELECT id, name, email, role, is_active FROM users ORDER BY id'
   );
   res.json(rows);
 });
 
-app.post("/api/users", authenticate, authorize(['manager']), async (req, res) => {
+app.post("/api/users", authenticate, authorize(['admin']), async (req, res) => {
   const { name, email, password, role } = req.body;
   
   if (!name || !email || !password || !role) {
@@ -143,7 +142,7 @@ app.post("/api/users", authenticate, authorize(['manager']), async (req, res) =>
   }
 });
 
-app.patch("/api/users/:id", authenticate, authorize(['manager']), async (req, res) => {
+app.patch("/api/users/:id", authenticate, authorize(['admin']), async (req, res) => {
   const userId = Number(req.params.id);
   const { role, is_active } = req.body;
   
@@ -269,8 +268,19 @@ app.get("/api/lockers", authenticate, async (_req, res) => {
   res.json(rows);
 });
 
-app.post("/api/lockers", authenticate, async (req, res) => {
+app.post("/api/lockers", authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const { product, subtype, locker_code } = req.body;
+
+  const { rows: existing } = await pool.query(
+    'SELECT id FROM lockers WHERE LOWER(TRIM(product)) = LOWER(TRIM($1)) AND LOWER(TRIM(subtype)) = LOWER(TRIM($2))',
+    [product, subtype]
+  );
+  if (existing.length > 0) {
+    return res.status(409).json({
+      message: `A locker with product "${product}" and subtype "${subtype}" already exists.`
+    });
+  }
+
   const { rows } = await pool.query(
     `INSERT INTO lockers (locker_item_code, model, description, product, subtype)
      VALUES ($1, $2, $3, $4, $5)
@@ -286,7 +296,7 @@ app.post("/api/lockers", authenticate, async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-app.put("/api/lockers/:id", authenticate, async (req, res) => {
+app.put("/api/lockers/:id", authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const id = Number(req.params.id);
   const { product, subtype, locker_code } = req.body;
 
@@ -333,7 +343,7 @@ app.put("/api/lockers/:id", authenticate, async (req, res) => {
   res.json(rows[0]);
 });
 
-app.post("/api/lockers/upload", authenticate, authorize(['manager']), async (req, res) => {
+app.post("/api/lockers/upload", authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const { rows = [], fileName = "uploaded-file" } = req.body;
   let count = 0;
   let warnings = 0;
@@ -361,7 +371,12 @@ app.post("/api/lockers/upload", authenticate, authorize(['manager']), async (req
   res.json({ success: true, rowsSaved: count, warnings, fileName });
 });
 
-app.delete("/api/lockers/:lockerCode", authenticate, authorize(['manager']), async (req, res) => {
+app.delete("/api/lockers", authenticate, authorize(['admin', 'manager']), async (_req, res) => {
+  const { rowCount } = await pool.query("DELETE FROM lockers");
+  res.json({ success: true, deleted: rowCount });
+});
+
+app.delete("/api/lockers/:lockerCode", authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const lockerCode = String(req.params.lockerCode || "").trim();
   if (!lockerCode) {
     return res.status(400).json({ message: "lockerCode is required" });
@@ -395,7 +410,7 @@ app.get("/api/bom", authenticate, async (_req, res) => {
   res.json([...uploaded.rows, ...classic.rows]);
 });
 
-app.post("/api/bom/upload", authenticate, authorize(['manager']), async (req, res) => {
+app.post("/api/bom/upload", authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const { locker_model, rows = [], fileName = "uploaded-bom.xlsx" } = req.body;
   if (!locker_model) {
     return res.status(400).json({ message: "locker_model is required" });
@@ -458,7 +473,7 @@ app.post("/api/bom/upload", authenticate, authorize(['manager']), async (req, re
   res.status(201).json({ success: true, rowsSaved, warnings, fileName });
 });
 
-app.post("/api/bom/custom", authenticate, async (req, res) => {
+app.post("/api/bom/custom", authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const { locker_model, rows = [] } = req.body;
   const inserted = [];
   for (const r of rows) {
@@ -473,7 +488,7 @@ app.post("/api/bom/custom", authenticate, async (req, res) => {
   res.status(201).json(inserted);
 });
 
-app.put("/api/bom/row/:source/:id", authenticate, async (req, res) => {
+app.put("/api/bom/row/:source/:id", authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const source = String(req.params.source || "").trim().toLowerCase();
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
@@ -577,7 +592,7 @@ app.put("/api/bom/row/:source/:id", authenticate, async (req, res) => {
   return res.json(rows[0]);
 });
 
-app.delete("/api/bom/row/:source/:id", authenticate, async (req, res) => {
+app.delete("/api/bom/row/:source/:id", authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const source = String(req.params.source || "").trim().toLowerCase();
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
@@ -606,7 +621,7 @@ app.delete("/api/bom/row/:source/:id", authenticate, async (req, res) => {
   return res.json({ success: true, deleted: rowCount });
 });
 
-app.delete("/api/bom/model/:lockerModel", authenticate, authorize(['manager']), async (req, res) => {
+app.delete("/api/bom/model/:lockerModel", authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const lockerModel = String(req.params.lockerModel || "").trim();
   if (!lockerModel) {
     return res.status(400).json({ message: "lockerModel is required" });
@@ -631,7 +646,7 @@ app.get("/api/uploads", authenticate, async (_req, res) => {
   res.json(rows);
 });
 
-app.post("/api/uploads", authenticate, authorize(['manager']), async (req, res) => {
+app.post("/api/uploads", authenticate, authorize(['admin', 'manager', 'employee']), async (req, res) => {
   const { date, fileName, stockRows = [] } = req.body;
   let warnings = 0;
   const str = (v) => (v == null || v === "" ? "" : String(v).trim());
@@ -709,7 +724,7 @@ app.post("/api/uploads", authenticate, authorize(['manager']), async (req, res) 
   }
 });
 
-app.post("/api/plan", authenticate, async (req, res) => {
+app.post("/api/plan", authenticate, authorize(['admin', 'manager', 'employee']), async (req, res) => {
   const { date, rows = [] } = req.body;
 
   const missingBomCodes = await findMissingBomLockerCodes(rows);

@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
 function BomManagerPage({ user }) {
-  const isManager = user?.role === "manager";
+  const canManage = user?.role === "admin" || user?.role === "manager";
   const { data = [], isLoading } = useBom();
   const queryClient = useQueryClient();
   const addCustomBomMutation = useAddCustomBom();
@@ -231,15 +231,17 @@ function BomManagerPage({ user }) {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCustomForm(true)}
-          className="ml-auto rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary"
-        >
-          Add Custom BOM
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setShowCustomForm(true)}
+            className="ml-auto rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary"
+          >
+            Add Custom BOM
+          </button>
+        )}
       </div>
-      {isManager && (
+      {canManage && (
         <FileDropzone
           uploading={uploadMutation.isPending}
           onUpload={handleBomUpload}
@@ -261,7 +263,7 @@ function BomManagerPage({ user }) {
               <div key={model}>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-lg font-medium text-black">Locker Model: {model}</h3>
-                  {isManager && (
+                  {canManage && (
                     <button
                       type="button"
                       onClick={() => setDeleteBomModalModel(model)}
@@ -292,7 +294,7 @@ function BomManagerPage({ user }) {
                       label: "Actions",
                       sortable: false,
                       render: (_value, row) =>
-                        editingRowKey === `${row.row_source}:${row.id}` ? (
+                        !canManage ? null : editingRowKey === `${row.row_source}:${row.id}` ? (
                           <div className="flex gap-2">
                             <button
                               type="button"
@@ -339,7 +341,7 @@ function BomManagerPage({ user }) {
           )}
         </div>
       )}
-      {showCustomForm && (
+      {canManage && showCustomForm && (
         <div className="fixed inset-0 z-30 grid place-items-center bg-gray-900/40 p-4">
           <div className="relative w-full max-w-2xl rounded-lg border border-[#810055]/20 bg-white p-6 shadow-lg">
             <button

@@ -47,7 +47,14 @@ function AppLayout() {
             <Route path="/stock-upload" element={<StockUploadPage user={user} />} />
             <Route path="/plan-entry" element={<PlanEntryPage user={user} />} />
             <Route path="/mrp-calculate" element={<MrpOutputPage user={user} />} />
-            <Route path="/users" element={<UserManagementPage />} />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute allowedRoles={["admin"]} redirectTo="/locker-master">
+                  <UserManagementPage user={user} />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </div>
       </main>
@@ -58,6 +65,7 @@ function AppLayout() {
 function App() {
   return (
     <Routes>
+      <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/*"

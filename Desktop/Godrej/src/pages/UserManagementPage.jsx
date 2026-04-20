@@ -1,11 +1,21 @@
 import { useState } from "react";
+import { Navigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import DataTable from "../components/DataTable";
 import SkeletonTable from "../components/SkeletonTable";
 
-function UserManagementPage() {
+const ASSIGNABLE_ROLES = [
+  { value: "manager", label: "Manager" },
+  { value: "employee", label: "Employee" },
+];
+
+function UserManagementPage({ user }) {
   const queryClient = useQueryClient();
+
+  if (user?.role && user.role !== "admin") {
+    return <Navigate to="/locker-master" replace />;
+  }
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "employee" });
 
@@ -111,17 +121,25 @@ function UserManagementPage() {
               {
                 key: "role",
                 label: "Role",
-                render: (value, row) => (
-                  <select
-                    value={value}
-                    onChange={(e) => handleRoleChange(row.id, e.target.value)}
-                    disabled={updateUserMutation.isPending}
-                    className="rounded-md border border-[#810055]/30 px-2 py-1 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
-                  >
-                    <option value="manager">Manager</option>
-                    <option value="employee">Employee</option>
-                  </select>
-                ),
+                render: (value, row) =>
+                  value === "admin" ? (
+                    <span className="inline-block rounded-full bg-[#810055]/10 px-3 py-1 text-xs font-semibold uppercase text-[#810055]">
+                      Admin
+                    </span>
+                  ) : (
+                    <select
+                      value={value}
+                      onChange={(e) => handleRoleChange(row.id, e.target.value)}
+                      disabled={updateUserMutation.isPending}
+                      className="rounded-md border border-[#810055]/30 px-2 py-1 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
+                    >
+                      {ASSIGNABLE_ROLES.map((roleOption) => (
+                        <option key={roleOption.value} value={roleOption.value}>
+                          {roleOption.label}
+                        </option>
+                      ))}
+                    </select>
+                  ),
               },
               {
                 key: "is_active",
@@ -211,8 +229,11 @@ function UserManagementPage() {
                   onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
                   className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                 >
-                  <option value="employee">Employee</option>
-                  <option value="manager">Manager</option>
+                  {ASSIGNABLE_ROLES.map((roleOption) => (
+                    <option key={roleOption.value} value={roleOption.value}>
+                      {roleOption.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

@@ -7,7 +7,6 @@ import toast from "react-hot-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
 function StockUploadPage({ user }) {
-  const isManager = user?.role === "manager";
   const { data = [], isLoading } = useUploads();
   const queryClient = useQueryClient();
   const uploadMutation = useFileUpload();
@@ -30,9 +29,8 @@ function StockUploadPage({ user }) {
   };
 
   return (
-    <div className={`grid gap-6 ${isManager ? "xl:grid-cols-[1fr,2fr]" : ""}`}>
-      {isManager && (
-        <section className="space-y-4 rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
+    <div className="grid gap-6 xl:grid-cols-[1fr,2fr]">
+      <section className="space-y-4 rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-medium text-black">Upload Stock</h2>
           <input
             type="date"
@@ -55,7 +53,6 @@ function StockUploadPage({ user }) {
             </p>
           </div>
         </section>
-      )}
       <section className="rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-medium text-black">Last 7 Uploads</h2>
         {isLoading ? (

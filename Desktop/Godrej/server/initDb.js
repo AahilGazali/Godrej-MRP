@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'employee' 
-    CHECK (role IN ('manager', 'employee')),
+    CHECK (role IN ('admin', 'manager', 'employee')),
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -139,6 +139,12 @@ ON CONFLICT (item_code) DO NOTHING;
 
 export async function initDb() {
   await pool.query(schemaSql);
+  await pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
+  await pool.query(`
+    ALTER TABLE users
+    ADD CONSTRAINT users_role_check
+    CHECK (role IN ('admin', 'manager', 'employee'))
+  `);
   await pool.query(`ALTER TABLE lockers ADD COLUMN IF NOT EXISTS product TEXT`);
   await pool.query(`ALTER TABLE lockers ADD COLUMN IF NOT EXISTS subtype TEXT`);
   await pool.query(`UPDATE lockers SET product = COALESCE(product, description), subtype = COALESCE(subtype, model)`);
@@ -177,9 +183,10 @@ export async function initDb() {
     const passwordHash = await bcrypt.hash('Admin@123', 10);
     await pool.query(
       `INSERT INTO users (name, email, password_hash, role, is_active)
-       VALUES ('Admin', 'admin@godrej.com', $1, 'manager', true)
+       VALUES ('Admin', 'admin@godrej.com', $1, 'admin', true)
        ON CONFLICT (email) DO NOTHING`,
       [passwordHash]
     );
   }
+  await pool.query(`UPDATE users SET role = 'admin', is_active = true WHERE email = 'admin@godrej.com'`);
 }

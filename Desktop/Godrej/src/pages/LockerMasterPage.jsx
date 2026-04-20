@@ -9,7 +9,7 @@ import { useAddLocker, useDeleteLocker, useFileUpload, useLockerMaster, useUpdat
 const EMPTY_FORM = { product: "", subtype: "", locker_code: "" };
 
 function LockerMasterPage({ user }) {
-  const isManager = user?.role === "manager";
+  const canManage = user?.role === "admin" || user?.role === "manager";
   const { data = [], isLoading } = useLockerMaster();
   const queryClient = useQueryClient();
   const uploadMutation = useFileUpload();
@@ -17,9 +17,12 @@ function LockerMasterPage({ user }) {
   const updateLockerMutation = useUpdateLocker();
   const deleteLockerMutation = useDeleteLocker();
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const [lastUploadInfo, setLastUploadInfo] = useState(null);
   const [editingLocker, setEditingLocker] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [formError, setFormError] = useState("");
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const rows = data;
   const isSaving = addLockerMutation.isPending || updateLockerMutation.isPending;
 
@@ -27,16 +30,19 @@ function LockerMasterPage({ user }) {
     setShowModal(false);
     setEditingLocker(null);
     setForm(EMPTY_FORM);
+    setFormError("");
   };
 
   const openAddModal = () => {
     setEditingLocker(null);
     setForm(EMPTY_FORM);
+    setFormError("");
     setShowModal(true);
   };
 
   const openEditModal = (locker) => {
     setEditingLocker(locker);
+    setFormError("");
     setForm({
       product: locker.product ?? "",
       subtype: locker.subtype ?? "",
@@ -60,9 +66,13 @@ function LockerMasterPage({ user }) {
     };
 
     if (!payload.product || !payload.subtype || !payload.locker_code) {
-      toast.error("Product, SubType and Locker code are required");
+      const message = "Product, SubType and Locker code are required";
+      setFormError(message);
+      toast.error(message);
       return;
     }
+
+    setFormError("");
 
     try {
       if (editingLocker?.id) {
@@ -75,7 +85,30 @@ function LockerMasterPage({ user }) {
       await queryClient.invalidateQueries({ queryKey: ["lockerMaster"] });
       closeModal();
     } catch (error) {
-      toast.error(error?.response?.data?.message || error?.message || "Failed to save locker");
+      const message = error?.response?.data?.message || error?.message || "Failed to save locker";
+      setFormError(message);
+      toast.error(message);
+    }
+  };
+
+  const handleDeleteAllLockers = async () => {
+    setIsDeletingAll(true);
+    try {
+      const response = await fetch("/api/lockers", {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to delete all lockers");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["lockerMaster"] });
+      setShowDeleteAllModal(false);
+      toast.success("All locker records deleted successfully");
+    } catch (error) {
+      toast.error(error?.message || "Failed to delete all lockers");
+    } finally {
+      setIsDeletingAll(false);
     }
   };
 
@@ -94,18 +127,18 @@ function LockerMasterPage({ user }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-[1fr,2fr]">
-        {isManager && (
+      <div className={`grid gap-6 ${canManage ? "xl:grid-cols-[1fr,2fr]" : ""}`}>
+        {canManage && (
           <FileDropzone
             uploading={uploadMutation.isPending}
             onUpload={handleUpload}
             persistedUploadInfo={lastUploadInfo}
           />
         )}
-        <section className={`rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm ${!isManager ? "xl:col-span-2" : ""}`}>
+        <section className={`rounded-lg border border-[#810055]/20 bg-white p-6 shadow-sm ${!canManage ? "xl:col-span-2" : ""}`}>
           <div className="mb-5 flex items-center justify-between border-b border-[#810055]/20 pb-4">
             <h2 className="text-lg font-medium text-black">Locker Master Data</h2>
-            {isManager && (
+            {canManage && (
               <button
                 type="button"
                 onClick={openAddModal}
@@ -120,6 +153,17 @@ function LockerMasterPage({ user }) {
           ) : (
             <DataTable
               searchKeys={["product"]}
+              searchAction={
+                canManage ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteAllModal(true)}
+                    className="rounded-md bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100"
+                  >
+                    Delete All
+                  </button>
+                ) : null
+              }
               columns={[
                 { key: "product", label: "Product" },
                 { key: "subtype", label: "SubType" },
@@ -128,16 +172,16 @@ function LockerMasterPage({ user }) {
                   key: "actions",
                   label: "Actions",
                   sortable: false,
-                  render: (_value, row) => (
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(row)}
-                        className="rounded-md bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
-                      >
-                        Edit
-                      </button>
-                      {isManager && (
+                  render: (_value, row) =>
+                    canManage ? (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(row)}
+                          className="rounded-md bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+                        >
+                          Edit
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteLocker(row)}
@@ -145,9 +189,8 @@ function LockerMasterPage({ user }) {
                         >
                           Delete
                         </button>
-                      )}
-                    </div>
-                  ),
+                      </div>
+                    ) : null,
                 },
               ]}
               rows={rows}
@@ -156,7 +199,7 @@ function LockerMasterPage({ user }) {
           )}
         </section>
       </div>
-      {showModal && (
+      {canManage && showModal && (
         <div className="fixed inset-0 z-30 grid place-items-center bg-gray-900/40 p-4">
           <div className="relative w-full max-w-lg rounded-lg border border-[#810055]/20 bg-white p-6 shadow-lg">
             <button
@@ -172,22 +215,32 @@ function LockerMasterPage({ user }) {
             <div className="grid gap-4">
               <input
                 value={form.product}
-                onChange={(e) => setForm((p) => ({ ...p, product: e.target.value }))}
+                onChange={(e) => {
+                  setFormError("");
+                  setForm((p) => ({ ...p, product: e.target.value }));
+                }}
                 className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 py-2 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                 placeholder="Product"
               />
               <input
                 value={form.subtype}
-                onChange={(e) => setForm((p) => ({ ...p, subtype: e.target.value }))}
+                onChange={(e) => {
+                  setFormError("");
+                  setForm((p) => ({ ...p, subtype: e.target.value }));
+                }}
                 className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 py-2 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                 placeholder="SubType"
               />
               <input
                 value={form.locker_code}
-                onChange={(e) => setForm((p) => ({ ...p, locker_code: e.target.value }))}
+                onChange={(e) => {
+                  setFormError("");
+                  setForm((p) => ({ ...p, locker_code: e.target.value }));
+                }}
                 className="h-10 w-full rounded-lg border border-[#810055]/30 px-3 py-2 text-sm text-black outline-none focus:border-transparent focus:ring-2 focus:ring-secondary"
                 placeholder="Locker code"
               />
+              {formError ? <p className="text-sm font-medium text-red-600">{formError}</p> : null}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <button
@@ -204,6 +257,35 @@ function LockerMasterPage({ user }) {
                 className="rounded-lg bg-secondary px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? "Saving..." : editingLocker ? "Update" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {canManage && showDeleteAllModal && (
+        <div className="fixed inset-0 z-30 grid place-items-center bg-gray-900/40 p-4">
+          <div className="w-full max-w-md rounded-lg border border-red-200 bg-white p-6 shadow-lg">
+            <h3 className="text-lg font-semibold text-black">Delete All Lockers?</h3>
+            <p className="mt-2 text-sm text-gray-700">
+              This will permanently delete all locker records. This cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteAllModal(false)}
+                disabled={isDeletingAll}
+                className="rounded-lg border border-[#810055]/30 px-4 py-2 text-sm font-medium text-black transition-colors duration-150 hover:bg-[#f9ecf5] disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAllLockers}
+                disabled={isDeletingAll}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {isDeletingAll ? "Deleting..." : "Confirm Delete"}
               </button>
             </div>
           </div>
